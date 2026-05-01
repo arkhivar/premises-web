@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="contract-editor">
+  <!-- LEFT: Live preview -->
+  <div class="contract-preview">
+    <div class="contract-preview-header">Предпросмотр</div>
+    <div class="contract-preview-body" id="previewPane">
+      <div class="empty-state">
+        <p>Заполните поля справа — здесь появится договор</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Form panel -->
+  <div class="contract-panel">
+    <h2 class="contract-panel-title">Параметры договора</h2>
+    <form method="post" id="contractForm" class="form">
+      <label class="field">
+        <span>Номер договора *</span>
+        <input type="text" name="number" placeholder="01/2026" required class="input"
+               onchange="refreshPreview()">
+      </label>
+
+      <div class="form-row">
+        <label class="field">
+          <span>Дата начала *</span>
+          <input type="date" name="startDate" required class="input"
+                 onchange="refreshPreview()">
+        </label>
+        <label class="field">
+          <span>Дата окончания</span>
+          <input type="date" name="endDate" class="input"
+                 onchange="refreshPreview()">
+        </label>
+      </div>
+
+      <label class="field">
+        <span>Шаблон договора *</span>
+        <select name="templateId" required class="input" onchange="refreshPreview()">
+          <option value="">— выберите шаблон —</option>
+          {% for t in templates %}
+            <option value="{{ t.id }}">{{ t.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Помещение *</span>
+        <select name="propertyId" required class="input" onchange="refreshPreview()">
+          <option value="">— выберите помещение —</option>
+          {% for p in properties %}
+            <option value="{{ p.id }}">{{ p.name }} — {{ p.address }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Арендатор *</span>
+        <select name="tenantId" required class="input" onchange="refreshPreview()">
+          <option value="">— выберите арендатора —</option>
+          {% for t in tenants %}
+            <option value="{{ t.id }}">{{ t.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Подписант (Арендодатель) *</span>
+        <select name="ownerId" required class="input" onchange="refreshPreview()">
+          {% for u in users %}
+            <option value="{{ u.id }}" {% if current_user.id == u.id %}selected{% endif %}>{{ u.name }} ({{ u.email }})</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <div class="form-row cols-3">
+        <label class="field">
+          <span>Арендная плата (₽) *</span>
+          <input type="number" name="rentAmount" placeholder="50000" required class="input"
+                 onchange="refreshPreview()">
+        </label>
+        <label class="field">
+          <span>Залог (₽)</span>
+          <input type="number" name="depositAmount" placeholder="50000" class="input"
+                 onchange="refreshPreview()">
+        </label>
+        <label class="field">
+          <span>День оплаты</span>
+          <input type="number" min="1" max="31" name="paymentDay" placeholder="10" class="input"
+                 onchange="refreshPreview()">
+        </label>
+      </div>
+
+      <fieldset class="fieldset">
+        <legend>Кто оплачивает</legend>
+        {% set payers = [
+          ("electricityPayer", "Электричество"),
+          ("waterPayer", "Вода"),
+          ("heatingPayer", "Отопление"),
+          ("cleaningPayer", "Уборка"),
+        ] %}
+        {% for name, label in payers %}
+          <div class="form-row-payer">
+            <span>{{ label }}</span>
+            <select name="{{ name }}" class="input input-sm" onchange="refreshPreview()">
+              <option value="TENANT"{% if name == 'electricityPayer' or name == 'cleaningPayer' %} selected{% endif %}>Арендатор</option>
+              <option value="OWNER"{% if name == 'waterPayer' or name == 'heatingPayer' %} selected{% endif %}>Арендодатель</option>
+            </select>
+          </div>
+        {% endfor %}
+      </fieldset>
+
+      <div class="form-actions">
+        <a href="/contracts" class="btn btn-outline">Отмена</a>
+        <button type="submit" class="btn btn-primary">Сгенерировать PDF</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+let previewTimer = null;
+function refreshPreview() {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(doPreview, 300);
+}
+
+async function doPreview() {
+  const form = document.getElementById('contractForm');
+  const pane = document.getElementById('previewPane');
+  const fd = new FormData(form);
+
+  // Only preview if template selected
+  if (!fd.get('templateId')) return;
+
+  try {
+    const resp = await fetch('/contracts/preview', { method: 'POST', body: fd });
+    if (resp.ok) {
+      const html = await resp.text();
+      pane.innerHTML = '<div class="contract-preview-doc">' + html + '</div>';
+    }
+  } catch (e) {
+    // silently ignore
+  }
+}
+</script>
+{% endblock %}

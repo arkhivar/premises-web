@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <h1>{% if tenant %}Редактировать{% else %}Добавить{% endif %} арендатора</h1>
+</div>
+
+<div class="card form-card">
+  <form method="post" class="form">
+    <label class="field">
+      <span>Тип</span>
+      <select name="type" class="input" id="tenantType">
+        <option value="LEGAL_ENTITY" {% if tenant and tenant.type == 'LEGAL_ENTITY' %}selected{% endif %}>Юридическое лицо</option>
+        <option value="ENTREPRENEUR" {% if tenant and tenant.type == 'ENTREPRENEUR' %}selected{% endif %}>ИП</option>
+        <option value="INDIVIDUAL" {% if tenant and tenant.type == 'INDIVIDUAL' %}selected{% endif %}>Физическое лицо</option>
+      </select>
+    </label>
+
+    <label class="field">
+      <span>{% if tenant and tenant.type == 'INDIVIDUAL' %}ФИО{% else %}Наименование{% endif %}</span>
+      <input type="text" name="name" value="{{ tenant.name if tenant else '' }}" required class="input">
+    </label>
+
+    <div class="form-row">
+      <label class="field">
+        <span>ИНН</span>
+        <input type="text" name="inn" value="{{ tenant.inn if tenant and tenant.inn else '' }}" placeholder="10 цифр" class="input">
+      </label>
+      <label class="field">
+        <span>КПП</span>
+        <input type="text" name="kpp" value="{{ tenant.kpp if tenant and tenant.kpp else '' }}" class="input">
+      </label>
+    </div>
+
+    <label class="field">
+      <span>ОГРН</span>
+      <input type="text" name="ogrn" value="{{ tenant.ogrn if tenant and tenant.ogrn else '' }}" class="input">
+    </label>
+
+    <label class="field">
+      <span>Юридический адрес</span>
+      <input type="text" name="legalAddress" value="{{ tenant.legalAddress if tenant and tenant.legalAddress else '' }}" class="input">
+    </label>
+
+    <fieldset class="fieldset">
+      <legend>Паспортные данные (для физлиц)</legend>
+      <div class="form-row">
+        <label class="field">
+          <span>Серия паспорта</span>
+          <input type="text" name="passportSeries" value="{{ tenant.passportSeries if tenant and tenant.passportSeries else '' }}" class="input">
+        </label>
+        <label class="field">
+          <span>Номер паспорта</span>
+          <input type="text" name="passportNumber" value="{{ tenant.passportNumber if tenant and tenant.passportNumber else '' }}" class="input">
+        </label>
+      </div>
+      <label class="field">
+        <span>Кем выдан</span>
+        <input type="text" name="passportIssuedBy" value="{{ tenant.passportIssuedBy if tenant and tenant.passportIssuedBy else '' }}" class="input">
+      </label>
+      <label class="field">
+        <span>Дата выдачи</span>
+        <input type="date" name="passportIssuedDate" value="{{ tenant.passportIssuedDate.strftime('%Y-%m-%d') if tenant and tenant.passportIssuedDate else '' }}" class="input">
+      </label>
+      <label class="field">
+        <span>Адрес регистрации</span>
+        <input type="text" name="registrationAddress" value="{{ tenant.registrationAddress if tenant and tenant.registrationAddress else '' }}" class="input">
+      </label>
+    </fieldset>
+
+    <div class="form-row">
+      <label class="field">
+        <span>Телефон</span>
+        <input type="text" name="phone" value="{{ tenant.phone if tenant and tenant.phone else '' }}" class="input">
+      </label>
+      <label class="field">
+        <span>Email</span>
+        <input type="email" name="email" value="{{ tenant.email if tenant and tenant.email else '' }}" class="input">
+      </label>
+    </div>
+
+    <fieldset class="fieldset">
+      <legend>Банковские реквизиты</legend>
+      <label class="field">
+        <span>Наименование банка</span>
+        <input type="text" name="bankName" value="{{ tenant.bankName if tenant and tenant.bankName else '' }}" class="input">
+      </label>
+      <label class="field">
+        <span>БИК</span>
+        <input type="text" name="bankBik" value="{{ tenant.bankBik if tenant and tenant.bankBik else '' }}" class="input">
+      </label>
+      <label class="field">
+        <span>Расчётный счёт</span>
+        <input type="text" name="bankAccount" value="{{ tenant.bankAccount if tenant and tenant.bankAccount else '' }}" class="input">
+      </label>
+      <label class="field">
+        <span>Корреспондентский счёт</span>
+        <input type="text" name="bankCorrAccount" value="{{ tenant.bankCorrAccount if tenant and tenant.bankCorrAccount else '' }}" class="input">
+      </label>
+    </fieldset>
+
+    <div class="form-actions">
+      <a href="/tenants" class="btn btn-outline">Отмена</a>
+      <button type="submit" class="btn btn-primary">{% if tenant %}Сохранить{% else %}Добавить{% endif %}</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

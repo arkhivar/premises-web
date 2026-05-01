@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <div class="page-header-row">
+    <div>
+      <h1>Арендаторы</h1>
+      <p class="text-muted">Управление списком арендаторов</p>
+    </div>
+    <a href="/tenants/new" class="btn btn-primary">+ Добавить арендатора</a>
+  </div>
+</div>
+
+{% if tenants %}
+  <div class="card-grid cols-3">
+    {% for t in tenants %}
+      <div class="card">
+        <div class="card-header card-header-row">
+          <div>
+            <h3 class="card-title">{{ t.name }}</h3>
+            <span class="badge">{{ type_labels.get(t.type, t.type) }}</span>
+          </div>
+          <div class="btn-group">
+            <a href="/tenants/{{ t.id }}/edit" class="btn btn-ghost btn-sm">✎</a>
+            <form method="post" action="/tenants/{{ t.id }}/delete" onsubmit="return confirm('Удалить арендатора?')" style="display:inline">
+              <button class="btn btn-ghost btn-sm btn-danger">✕</button>
+            </form>
+          </div>
+        </div>
+        <div class="card-body">
+          {% if t.inn %}<p>ИНН: {{ t.inn }}</p>{% endif %}
+          {% if t.phone %}<p class="text-muted">{{ t.phone }}</p>{% endif %}
+          {% if t.email %}<p class="text-muted">{{ t.email }}</p>{% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="empty-state">Нет арендаторов. <a href="/tenants/new">Добавьте первого арендатора</a>.</div>
+{% endif %}
+{% endblock %}

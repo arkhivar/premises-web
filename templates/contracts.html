@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <div class="page-header-row">
+    <div>
+      <h1>Договоры</h1>
+      <p class="text-muted">Генерация и управление договорами аренды</p>
+    </div>
+    <a href="/contracts/new" class="btn btn-primary">+ Создать договор</a>
+  </div>
+</div>
+
+{% if contracts %}
+  <div class="card-grid cols-3">
+    {% for c in contracts %}
+      <div class="card">
+        <div class="card-header card-header-row">
+          <div>
+            <h3 class="card-title">Договор №{{ c.number }}</h3>
+            <span class="badge badge-{{ c.status|lower }}">{{ status_labels.get(c.status, c.status) }}</span>
+          </div>
+          <div class="btn-group">
+            {% if c.pdfUrl %}
+              <a href="{{ c.pdfUrl }}" target="_blank" class="btn btn-ghost btn-sm" title="Скачать PDF">↓</a>
+            {% endif %}
+            <form method="post" action="/contracts/{{ c.id }}/delete" onsubmit="return confirm('Удалить договор?')" style="display:inline">
+              <button class="btn btn-ghost btn-sm btn-danger">✕</button>
+            </form>
+          </div>
+        </div>
+        <div class="card-body">
+          <p><strong>{{ c.tenant }}</strong></p>
+          <p class="text-muted">{{ c.property }}</p>
+          <p class="text-muted">{{ "%.0f"|format(c.rentAmount) }} ₽/мес</p>
+          {% if c.startDate %}
+            <p class="text-muted text-sm">
+              {{ c.startDate.strftime('%d.%m.%Y') }}
+              {% if c.endDate %} — {{ c.endDate.strftime('%d.%m.%Y') }}{% endif %}
+            </p>
+          {% endif %}
+          <p class="text-muted text-sm">Подписант: {{ c.owner }}</p>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="empty-state">Нет договоров. <a href="/contracts/new">Создайте первый договор</a>.</div>
+{% endif %}
+{% endblock %}

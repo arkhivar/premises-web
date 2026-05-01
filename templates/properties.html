@@ -1,0 +1,100 @@
+{% set status_labels = {'DRAFT': 'Черновик', 'ACTIVE': 'Действует', 'EXPIRED': 'Истёк', 'TERMINATED': 'Расторгнут'} %}
+
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <div class="page-header-row">
+    <div>
+      <h1>Помещения</h1>
+      <p class="text-muted">Управление списком помещений</p>
+    </div>
+    <a href="/properties/new" class="btn btn-primary">+ Добавить помещение</a>
+  </div>
+</div>
+
+{% if groups %}
+  {% for owner_name, items in groups %}
+    <div class="prop-group">
+      <div class="prop-group-header">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        {{ owner_name }}
+        <span class="prop-group-count">{{ items|length }}</span>
+      </div>
+      <div class="prop-list">
+        {% for p in items %}
+          <div class="prop-row">
+            <div class="prop-row-main">
+              <div class="prop-row-thumb">
+                {% if p.thumbnailUrl %}
+                  <img src="{{ p.thumbnailUrl }}" alt="" class="prop-row-img">
+                {% else %}
+                  <div class="prop-row-img-placeholder">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                  </div>
+                {% endif %}
+              </div>
+              <div class="prop-row-info">
+                <div class="prop-row-name-line">
+                  <a href="/properties/{{ p.id }}/edit" class="prop-row-name">{{ p.name }}</a>
+                  <div class="prop-row-badges">
+                    <span class="badge">{{ type_labels.get(p.type, p.type) }}</span>
+                    {% if p.isPersonal %}<span class="badge badge-outline">Личное</span>{% endif %}
+                  </div>
+                </div>
+                <span class="prop-row-addr">{{ p.address }}</span>
+                <div class="prop-row-details">
+                  <span class="prop-detail"><strong>{{ p.area }}</strong> м²</span>
+                  {% if p.floor %}<span class="prop-detail prop-detail-floor"><strong>{{ p.floor }}</strong> эт.</span>{% endif %}
+                  {% if p.cadastralNumber %}<span class="prop-detail prop-detail-kn">КН: {{ p.cadastralNumber }}</span>{% endif %}
+                </div>
+              </div>
+            </div>
+            <div class="prop-row-contracts">
+              {% if p.contracts %}
+                <div class="contract-history">
+                  <div class="contract-history-header">
+                    <span class="contract-history-title">Договоры</span>
+                    {% set active_contracts = p.contracts | selectattr('status', 'equalto', 'ACTIVE') | list %}
+                    {% if active_contracts %}
+                      <span class="badge badge-active">{{ active_contracts|length }} активных</span>
+                    {% endif %}
+                  </div>
+                  <div class="contract-history-list">
+                    {% for c in p.contracts %}
+                      <div class="contract-history-item {% if c.status == 'ACTIVE' %}contract-active{% elif c.status == 'DRAFT' %}contract-draft{% else %}contract-archived{% endif %}">
+                        <div class="contract-history-number">{{ c.number }}</div>
+                        <div class="contract-history-tenant">{{ c.tenant }}</div>
+                        <div class="contract-history-meta">
+                          <span class="contract-history-status">{{ status_labels.get(c.status, c.status) }}</span>
+                          {% if c.startDate %}
+                            <span class="contract-history-date">{{ c.startDate.strftime('%d.%m.%Y') }}</span>
+                          {% endif %}
+                          {% if c.rentAmount %}
+                            <span class="contract-history-amount">{{ "{:,.0f}".format(c.rentAmount).replace(",", " ") }} ₽</span>
+                          {% endif %}
+                        </div>
+                      </div>
+                    {% endfor %}
+                  </div>
+                </div>
+              {% else %}
+                <div class="contract-history-empty">
+                  <span class="text-muted">Нет договоров</span>
+                </div>
+              {% endif %}
+            </div>
+            <div class="prop-row-actions">
+              <a href="/properties/{{ p.id }}/edit" class="btn btn-ghost btn-sm">✎</a>
+              <form method="post" action="/properties/{{ p.id }}/delete" onsubmit="return confirm('Удалить помещение?')" style="display:inline">
+                <button class="btn btn-ghost btn-sm btn-danger">✕</button>
+              </form>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endfor %}
+{% else %}
+  <div class="empty-state">Нет помещений. <a href="/properties/new">Добавьте первое помещение</a>.</div>
+{% endif %}
+{% endblock %}

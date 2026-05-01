@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="auth-page">
+  <div class="card auth-card">
+    <h2 class="card-title">Вход</h2>
+    <p class="card-sub">Войдите в систему для доступа к управлению недвижимостью</p>
+    <form method="post" class="form">
+      <label class="field">
+        <span>Email</span>
+        <input type="email" name="email" placeholder="admin@premises.local" required class="input">
+      </label>
+      <label class="field">
+        <span>Пароль</span>
+        <input type="password" name="password" required class="input">
+      </label>
+      {% if error %}
+        <p class="form-error">{{ error }}</p>
+      {% endif %}
+      <button type="submit" class="btn btn-primary btn-full">Войти</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

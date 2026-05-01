@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <h1>Договор создан!</h1>
+  <p class="text-muted">Договор №{{ number }} готов к скачиванию.</p>
+</div>
+
+<div class="card" style="text-align:center">
+  <div class="card-body">
+    <p style="font-size:2rem;margin-bottom:1rem">📄</p>
+    <p>Договор №{{ number }} создан и готов к скачиванию.</p>
+    {% if pdf_url %}
+      <a href="{{ pdf_url }}" target="_blank" class="btn btn-primary" style="margin-top:1rem">Скачать PDF</a>
+    {% endif %}
+    <a href="/contracts" class="btn btn-outline" style="margin-top:1rem">К списку договоров</a>
+  </div>
+</div>
+{% endblock %}

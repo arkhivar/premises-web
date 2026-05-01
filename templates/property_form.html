@@ -1,0 +1,317 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <div class="page-header-row">
+    <div>
+      <h1>{% if property %}Редактировать{% else %}Добавить{% endif %} помещение</h1>
+    </div>
+  </div>
+</div>
+
+<div class="card form-card">
+  <form method="post" enctype="multipart/form-data" class="form">
+    <label class="field">
+      <span>Название</span>
+      <input type="text" name="name" value="{{ property.name if property else '' }}" placeholder="Офис на Ленина, 15" required class="input">
+    </label>
+
+    <label class="field">
+      <span>Тип</span>
+      <select name="type" class="input">
+        {% for val, label in type_labels.items() %}
+          <option value="{{ val }}" {% if property and property.type == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label class="field">
+      <span>Адрес</span>
+      <input type="text" name="address" value="{{ property.address if property else '' }}" placeholder="г. Москва, ул. Ленина, д. 15" required class="input">
+    </label>
+
+    <div class="form-row">
+      <label class="field">
+        <span>Площадь (м²)</span>
+        <input type="number" step="0.1" name="area" value="{{ property.area if property else '' }}" placeholder="45.5" class="input">
+      </label>
+      <label class="field">
+        <span>Этаж</span>
+        <input type="number" name="floor" value="{{ property.floor if property and property.floor else '' }}" placeholder="3" class="input">
+      </label>
+    </div>
+
+    <label class="field">
+      <span>Кадастровый номер</span>
+      <input type="text" name="cadastralNumber" value="{{ property.cadastralNumber if property and property.cadastralNumber else '' }}" placeholder="77:01:0001075:1234" class="input">
+    </label>
+
+    <label class="field-check">
+      <input type="checkbox" name="isPersonal" {% if property and property.isPersonal %}checked{% endif %}>
+      <span>Личная недвижимость (не видна бухгалтеру)</span>
+    </label>
+
+    <label class="field">
+      <span>Собственник</span>
+      <select name="ownerId" class="input">
+        {% for u in owners %}
+          <option value="{{ u.id }}" {% if property and property.ownerId == u.id %}selected{% endif %}{% if not property and current_user.id == u.id %}selected{% endif %}>{{ u.name }} ({{ u.email }})</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <hr class="form-divider">
+
+    <div class="ocr-section">
+      <div class="ocr-header">
+        <span class="ocr-title">Заполнить из документа</span>
+        <span class="ocr-sub">Загрузите PDF, DOCX или фото документа — поля заполнятся автоматически</span>
+      </div>
+      <div class="ocr-controls">
+        <input type="file" id="ocr-input" accept=".pdf,.docx,.jpg,.jpeg,.png,.gif,.webp,.bmp,.tiff,.tif" class="input-file">
+        <button type="button" id="ocr-btn" class="btn btn-outline" disabled>Распознать</button>
+        <span class="ocr-status" id="ocr-status"></span>
+      </div>
+      <div class="ocr-raw" id="ocr-raw" style="display:none">
+        <div class="ocr-raw-header">
+          <span class="ocr-raw-title">Распознанный текст:</span>
+          <button type="button" class="ocr-raw-toggle" id="ocr-raw-toggle">Показать</button>
+        </div>
+        <pre class="ocr-raw-text" id="ocr-raw-text" style="display:none"></pre>
+      </div>
+      <div class="ocr-fields" id="ocr-fields" style="display:none">
+        <span class="ocr-fields-title">Найдены поля:</span>
+        <div id="ocr-fields-list"></div>
+      </div>
+    </div>
+
+    <hr class="form-divider">
+
+    <div class="form-section">
+      <label class="field">
+        <span>Фотографии помещения</span>
+        <input type="file" id="photos-input" name="photos" accept="image/*" multiple class="input-file">
+      </label>
+      <div class="paste-zone" id="photo-paste-zone" tabindex="0">
+        <span class="paste-hint">или вставьте изображение из буфера <kbd>Ctrl+V</kbd></span>
+      </div>
+      <div class="upload-gallery" id="photo-preview">
+        {% if property and property.photoUrls %}
+          {% set photos = property.photoUrls|from_json %}
+          {% for url in photos %}
+            <div class="upload-thumb" data-existing>
+              <img src="{{ url|thumb_url }}" alt="Фото">
+              <div class="thumb-delete-form">
+                <button type="button" class="thumb-delete-btn" title="Удалить" data-delete-url="/properties/{{ property.id }}/delete-photo" data-delete-field="url" data-delete-value="{{ url }}">✕</button>
+              </div>
+            </div>
+          {% endfor %}
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="form-section">
+      <label class="field">
+        <span>Сканы документов</span>
+        <input type="file" name="documents" accept=".pdf,.jpg,.jpeg,.png" multiple class="input-file">
+      </label>
+      {% if property and property.documentUrls %}
+        {% set docs = property.documentUrls|from_json %}
+        {% if docs %}
+          <div class="upload-docs">
+            {% for url in docs %}
+              <div class="doc-row">
+                <a href="{{ url }}" target="_blank" class="doc-link">📄 {{ url.split('/')[-1] }}</a>
+                <button type="button" class="btn btn-ghost btn-sm btn-danger" title="Удалить" data-delete-url="/properties/{{ property.id }}/delete-document" data-delete-field="url" data-delete-value="{{ url }}">✕</button>
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endif %}
+    </div>
+
+    <div class="form-actions">
+      <a href="/properties" class="btn btn-outline">Отмена</a>
+      <button type="submit" class="btn btn-primary">{% if property %}Сохранить{% else %}Добавить{% endif %}</button>
+    </div>
+  </form>
+</div>
+
+<script>
+(function() {
+  var input = document.getElementById('photos-input');
+  var preview = document.getElementById('photo-preview');
+  var zone = document.getElementById('photo-paste-zone');
+
+  function newFilesFrom(items) {
+    var dt = new DataTransfer();
+    if (input.files) {
+      for (var i = 0; i < input.files.length; i++) dt.items.add(input.files[i]);
+    }
+    for (var j = 0; j < items.length; j++) dt.items.add(items[j]);
+    input.files = dt.files;
+    renderPreviews();
+  }
+
+  function renderPreviews() {
+    var existing = preview.querySelectorAll('.upload-thumb[data-pending]');
+    existing.forEach(function(el) { el.remove(); });
+    for (var i = 0; i < input.files.length; i++) {
+      (function(f) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+          var div = document.createElement('div');
+          div.className = 'upload-thumb';
+          div.setAttribute('data-pending', '');
+          var img = document.createElement('img');
+          img.src = e.target.result;
+          div.appendChild(img);
+          preview.appendChild(div);
+        };
+        reader.readAsDataURL(f);
+      })(input.files[i]);
+    }
+  }
+
+  input.addEventListener('change', function() {
+    renderPreviews();
+  });
+
+  document.addEventListener('paste', function(e) {
+    var tag = document.activeElement && document.activeElement.tagName;
+    var isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement.isContentEditable;
+    if (isTyping) return;
+
+    var items = (e.clipboardData || window.clipboardData).items;
+    if (!items) return;
+    var files = [];
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image/') === 0) {
+        var f = items[i].getAsFile();
+        if (f) files.push(f);
+      }
+    }
+    if (files.length > 0) {
+      e.preventDefault();
+      newFilesFrom(files);
+      zone.classList.add('paste-done');
+      setTimeout(function() { zone.classList.remove('paste-done'); }, 600);
+    }
+  });
+
+  zone.addEventListener('click', function() {
+    input.click();
+  });
+
+  // ── OCR ──
+  var ocrInput = document.getElementById('ocr-input');
+  var ocrBtn = document.getElementById('ocr-btn');
+  var ocrStatus = document.getElementById('ocr-status');
+  var ocrRaw = document.getElementById('ocr-raw');
+  var ocrRawText = document.getElementById('ocr-raw-text');
+  var ocrRawToggle = document.getElementById('ocr-raw-toggle');
+  var ocrFields = document.getElementById('ocr-fields');
+  var ocrFieldsList = document.getElementById('ocr-fields-list');
+
+  var fieldLabels = {
+    name: 'Название',
+    type: 'Тип',
+    address: 'Адрес',
+    area: 'Площадь',
+    floor: 'Этаж',
+    cadastralNumber: 'Кадастровый номер'
+  };
+
+  var typeValues = {'OFFICE': 'Офис', 'APARTMENT': 'Квартира', 'COMMERCIAL': 'Коммерческое', 'WAREHOUSE': 'Склад', 'OTHER': 'Прочее'};
+
+  ocrInput.addEventListener('change', function() {
+    ocrBtn.disabled = !ocrInput.files.length;
+    ocrStatus.textContent = '';
+    ocrRaw.style.display = 'none';
+    ocrFields.style.display = 'none';
+  });
+
+  ocrBtn.addEventListener('click', function() {
+    if (!ocrInput.files.length) return;
+    var file = ocrInput.files[0];
+    ocrBtn.disabled = true;
+    ocrStatus.textContent = 'Распознаю...';
+    ocrStatus.className = 'ocr-status ocr-status-loading';
+
+    var formData = new FormData();
+    formData.append('file', file);
+
+    fetch('/properties/ocr', { method: 'POST', body: formData })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.error) {
+          ocrStatus.textContent = 'Ошибка: ' + data.error;
+          ocrStatus.className = 'ocr-status ocr-status-error';
+          ocrBtn.disabled = false;
+          return;
+        }
+        ocrStatus.textContent = 'Готово! Проверьте поля.';
+        ocrStatus.className = 'ocr-status ocr-status-ok';
+
+        // Show raw text
+        if (data.raw_text) {
+          ocrRawText.textContent = data.raw_text;
+          ocrRaw.style.display = 'block';
+        }
+
+        // Show found fields
+        var fields = data.fields || {};
+        var hasFields = false;
+        var listHtml = '';
+        for (var key in fieldLabels) {
+          if (fields[key] !== undefined && fields[key] !== null && fields[key] !== '') {
+            hasFields = true;
+            var displayVal = key === 'type' ? (typeValues[fields[key]] || fields[key]) : fields[key];
+            listHtml += '<span class="ocr-field-tag">' + fieldLabels[key] + ': <strong>' + displayVal + '</strong></span>';
+          }
+        }
+        if (hasFields) {
+          ocrFieldsList.innerHTML = listHtml;
+          ocrFields.style.display = 'block';
+        }
+
+        // Auto-fill form
+        if (fields.name) { var el = document.querySelector('[name="name"]'); if (el) el.value = fields.name; }
+        if (fields.type) { var el = document.querySelector('[name="type"]'); if (el) el.value = fields.type; }
+        if (fields.address) { var el = document.querySelector('[name="address"]'); if (el) el.value = fields.address; }
+        if (fields.area) { var el = document.querySelector('[name="area"]'); if (el) el.value = fields.area; }
+        if (fields.floor) { var el = document.querySelector('[name="floor"]'); if (el) el.value = fields.floor; }
+        if (fields.cadastralNumber) { var el = document.querySelector('[name="cadastralNumber"]'); if (el) el.value = fields.cadastralNumber; }
+
+        ocrBtn.disabled = false;
+      })
+      .catch(function(err) {
+        ocrStatus.textContent = 'Ошибка сети: ' + err.message;
+        ocrStatus.className = 'ocr-status ocr-status-error';
+        ocrBtn.disabled = false;
+      });
+  });
+
+  ocrRawToggle.addEventListener('click', function() {
+    var hidden = ocrRawText.style.display === 'none';
+    ocrRawText.style.display = hidden ? 'block' : 'none';
+    ocrRawToggle.textContent = hidden ? 'Скрыть' : 'Показать';
+  });
+
+  // ── Delete buttons (photo / document) via fetch ──
+  document.querySelectorAll('[data-delete-url]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var url = btn.getAttribute('data-delete-url');
+      var field = btn.getAttribute('data-delete-field');
+      var value = btn.getAttribute('data-delete-value');
+      if (!confirm('Удалить?')) return;
+
+      var fd = new FormData();
+      fd.append(field, value);
+      fetch(url, { method: 'POST', body: fd })
+        .then(function() { window.location.reload(); })
+        .catch(function() { alert('Ошибка удаления'); });
+    });
+  });
+})();
+</script>
+{% endblock %}

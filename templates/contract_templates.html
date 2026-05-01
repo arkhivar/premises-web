@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header">
+  <div class="page-header-row">
+    <div>
+      <h1>Шаблоны договоров</h1>
+      <p class="text-muted">HTML-шаблоны с плейсхолдерами для генерации договоров</p>
+    </div>
+    <a href="/templates/new" class="btn btn-primary">+ Добавить шаблон</a>
+  </div>
+</div>
+
+{% if templates %}
+  <div class="card-grid cols-2">
+    {% for t in templates %}
+      <div class="card">
+        <div class="card-header card-header-row">
+          <div>
+            <h3 class="card-title">{{ t.name }}</h3>
+            <div style="display:flex;gap:0.25rem;margin-top:0.25rem">
+              <span class="badge {% if t.isActive %}badge-active{% else %}badge-inactive{% endif %}">
+                {{ 'Активен' if t.isActive else 'Не активен' }}
+              </span>
+              <span class="badge badge-outline">v{{ t.version }}</span>
+            </div>
+          </div>
+          <div class="btn-group">
+            <a href="/templates/{{ t.id }}/edit" class="btn btn-ghost btn-sm">✎</a>
+            <form method="post" action="/templates/{{ t.id }}/delete" onsubmit="return confirm('Удалить шаблон?')" style="display:inline">
+              <button class="btn btn-ghost btn-sm btn-danger">✕</button>
+            </form>
+          </div>
+        </div>
+        <div class="card-body">
+          {% if t.description %}<p class="text-muted">{{ t.description }}</p>{% endif %}
+          <p class="text-muted text-sm mt-2">{{ t.createdAt.strftime('%d.%m.%Y') }}</p>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="empty-state">Нет шаблонов. <a href="/templates/new">Добавьте первый шаблон</a>.</div>
+{% endif %}
+{% endblock %}

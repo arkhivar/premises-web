@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
+
+<div class="page-header">
+  <h1>{% if template %}Редактировать{% else %}Добавить{% endif %} шаблон</h1>
+</div>
+
+<div class="card template-editor-card">
+  <form method="post" class="form">
+    <label class="field">
+      <span>Название</span>
+      <input type="text" name="name" value="{{ template.name if template else '' }}" placeholder="Договор аренды офиса" required class="input">
+    </label>
+
+    <label class="field">
+      <span>Описание</span>
+      <input type="text" name="description" value="{{ template.description if template and template.description else '' }}" placeholder="Стандартный договор аренды офисного помещения" class="input">
+    </label>
+
+    <label class="field">
+      <span>Содержимое (Markdown)</span>
+      <p class="text-muted text-sm" style="margin-bottom:0.25rem">
+        Плейсхолдеры Jinja2:
+        <code>{{ "{{ contract.number }}" }}</code>
+        <code>{{ "{{ property.address }}" }}</code>
+        <code>{{ "{{ tenant.name }}" }}</code>
+        <code>{{ "{{ terms.rentAmount }}" }}</code>
+        <code>{{ "{% if tenant.inn %}...{% endif %}" }}</code>
+      </p>
+      <textarea name="htmlContent" id="templateEditor">{{ template.htmlContent if template else '' }}</textarea>
+    </label>
+
+    <div class="form-actions">
+      <a href="/templates" class="btn btn-outline">Отмена</a>
+      <button type="submit" class="btn btn-primary">{% if template %}Сохранить{% else %}Добавить{% endif %}</button>
+    </div>
+  </form>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
+<script>
+  const easyMDE = new EasyMDE({
+    element: document.getElementById('templateEditor'),
+    spellChecker: false,
+    placeholder: '# Договор аренды №{{ contract.number }}\n\n...',
+    status: ['lines', 'words'],
+    toolbar: ['bold', 'italic', 'heading', '|',
+              'quote', 'unordered-list', 'ordered-list', '|',
+              'link', 'table', '|',
+              'preview', 'side-by-side', 'fullscreen', '|',
+              'guide'],
+    sideBySideFullscreen: false,
+    lineNumbers: true,
+    autofocus: false,
+    minHeight: '400px',
+    maxHeight: '600px',
+  });
+</script>
+{% endblock %}

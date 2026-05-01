@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Premises — Управление недвижимостью</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a href="/dashboard" class="topbar-brand">Premises</a>
+    <nav class="topbar-nav">
+      {% set nav = [
+        ("/dashboard", "Главная"),
+        ("/properties", "Помещения"),
+        ("/tenants", "Арендаторы"),
+        ("/contracts", "Договоры"),
+        ("/templates", "Шаблоны"),
+        ("/settings", "Настройки"),
+      ] %}
+      {% for href, label in nav %}
+        <a href="{{ href }}" class="topbar-link{% if request.path.startswith(href) %} active{% endif %}">{{ label }}</a>
+      {% endfor %}
+    </nav>
+    <div class="topbar-spacer"></div>
+    {% if current_user.is_authenticated %}
+      <div class="topbar-user">
+        <div class="topbar-user-info">
+          <span class="topbar-user-name">{{ current_user.name }}</span>
+          <span class="topbar-user-email">{{ current_user.email }}</span>
+        </div>
+        <a href="/logout" class="btn btn-ghost" title="Выйти">Выход</a>
+      </div>
+    {% endif %}
+  </header>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-container">
+        {% for category, msg in messages %}
+          <div class="flash flash-{{ category }}">{{ msg }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <main class="main-content">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>
