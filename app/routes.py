@@ -21,9 +21,10 @@ from app.models import (
     contracts,
     contract_templates,
 )
-from app.auth import hash_password, verify_password, role_required
+from app.auth import hash_password, verify_password
 from app.pdf import render_contract_html, generate_pdf, build_template_data
-from app.ocr import extract_text, parse_fields
+from app.ocr import extract_text, parse_fields, parse_tenant_fields
+from app import llm
 from flask_login import UserMixin
 
 routes_bp = Blueprint("routes", __name__)
@@ -303,6 +304,7 @@ def property_create():
                     ownerId=request.form.get("ownerId") or current_user.id,
                     photoUrls=json.dumps(photo_urls) if photo_urls else None,
                     documentUrls=json.dumps(document_urls) if document_urls else None,
+                    documentMeta='[]',
                     createdAt=datetime.now(),
                     updatedAt=datetime.now(),
                 )
@@ -339,9 +341,7 @@ def property_edit(pid):
             floor_str = request.form.get("floor", "")
 
             existing_photos = json.loads(prop.photoUrls) if prop.photoUrls else []
-            existing_docs = json.loads(prop.documentUrls) if prop.documentUrls else []
             new_photos = _save_uploads(request.files.getlist("photos"), pid, "photos")
-            new_docs = _save_uploads(request.files.getlist("documents"), pid, "documents")
 
             d.execute(
                 update(properties)
@@ -356,7 +356,6 @@ def property_edit(pid):
                     isPersonal=request.form.get("isPersonal") == "on",
                     ownerId=request.form.get("ownerId") or current_user.id,
                     photoUrls=json.dumps(existing_photos + new_photos) if (existing_photos or new_photos) else None,
-                    documentUrls=json.dumps(existing_docs + new_docs) if (existing_docs or new_docs) else None,
                     updatedAt=datetime.now(),
                 )
             )
@@ -451,6 +450,9 @@ def property_delete_document(pid):
         docs = json.loads(prop.documentUrls) if prop.documentUrls else []
         if url in docs:
             docs.remove(url)
+            # Clean up documentMeta
+            doc_meta = json.loads(prop.documentMeta) if prop.documentMeta else []
+            doc_meta = [m for m in doc_meta if m.get("url") != url]
             # Delete file
             try:
                 filepath = os.path.join(
@@ -464,7 +466,11 @@ def property_delete_document(pid):
             d.execute(
                 update(properties)
                 .where(properties.c.id == pid)
-                .values(documentUrls=json.dumps(docs) if docs else None, updatedAt=datetime.now())
+                .values(
+                    documentUrls=json.dumps(docs) if docs else None,
+                    documentMeta=json.dumps(doc_meta) if doc_meta else '[]',
+                    updatedAt=datetime.now(),
+                )
             )
             d.commit()
             flash("Документ удалён", "success")
@@ -476,6 +482,62 @@ def property_delete_document(pid):
     finally:
         d.close()
     return redirect(url_for("routes.property_edit", pid=pid))
+
+
+@routes_bp.route("/properties/<pid>/upload-doc", methods=["POST"])
+@login_required
+@roles_for_form("ADMIN", "OWNER")
+def property_upload_doc(pid):
+    """Upload a document with a specific category to a property."""
+    doc_category = request.form.get("docCategory", "").strip()
+    if not doc_category:
+        return {"error": "Категория не указана"}, 400
+
+    d = db()
+    try:
+        prop = d.execute(select(properties).where(properties.c.id == pid)).first()
+        if not prop:
+            return {"error": "Помещение не найдено"}, 404
+
+        new_docs = _save_uploads(request.files.getlist("documents"), pid, "documents")
+        if not new_docs:
+            return {"error": "Файл не выбран"}, 400
+
+        existing_docs = json.loads(prop.documentUrls) if prop.documentUrls else []
+        doc_meta = json.loads(prop.documentMeta) if prop.documentMeta else []
+
+        custom_name = request.form.get("docCustomName", "").strip()
+        category_labels = {
+            "tech_passport": "Технический паспорт",
+            "cadastral_passport": "Кадастровый паспорт",
+            "egrn_extract": "Выписка ЕГРН",
+        }
+
+        for url in new_docs:
+            meta_entry = {
+                "url": url,
+                "type": doc_category,
+                "name": custom_name if doc_category == "other" and custom_name else category_labels.get(doc_category, custom_name or "Документ"),
+            }
+            doc_meta = [m for m in doc_meta if m.get("url") != url]
+            doc_meta.append(meta_entry)
+
+        d.execute(
+            update(properties)
+            .where(properties.c.id == pid)
+            .values(
+                documentUrls=json.dumps(existing_docs + new_docs) if (existing_docs or new_docs) else json.dumps(new_docs),
+                documentMeta=json.dumps(doc_meta),
+                updatedAt=datetime.now(),
+            )
+        )
+        d.commit()
+        return {"ok": True}
+    except Exception as e:
+        d.rollback()
+        return {"error": str(e)}, 500
+    finally:
+        d.close()
 
 
 @routes_bp.route("/properties/ocr", methods=["POST"])
@@ -496,14 +558,150 @@ def property_ocr():
         if not raw_text or len(raw_text.strip()) < 5:
             return {"error": "Не удалось извлечь текст из файла"}, 422
 
-        fields = parse_fields(raw_text)
-        return {
-            "raw_text": raw_text[:3000],
-            "fields": fields,
-        }
+        fields = {}
+        if llm.is_available():
+            try:
+                fields = llm.extract_property_fields(raw_text)
+            except Exception as e:
+                log = __import__("logging").getLogger(__name__)
+                log.warning("LLM extraction failed, falling back to regex: %s", e)
+                fields = parse_fields(raw_text)
+        else:
+            fields = parse_fields(raw_text)
+
+        return {"raw_text": raw_text[:3000], "fields": fields}
     except Exception as e:
         log = __import__("logging").getLogger(__name__)
         log.exception("OCR failed")
+        return {"error": f"Ошибка распознавания: {e}"}, 500
+
+
+@routes_bp.route("/properties/<pid>/ocr-from-url", methods=["POST"])
+@login_required
+@roles_for_form("ADMIN", "OWNER")
+def property_ocr_from_url(pid):
+    """OCR on an already-uploaded property document."""
+    url = request.form.get("url", "").strip()
+    if not url:
+        return {"error": "URL не указан"}, 400
+
+    filepath = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        "public", url.lstrip("/")
+    )
+    if not os.path.isfile(filepath):
+        return {"error": "Файл не найден"}, 404
+
+    filename = os.path.basename(filepath)
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if ext not in ("pdf", "docx", "jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff", "tif"):
+        return {"error": f"Неподдерживаемый формат: .{ext}"}, 400
+
+    try:
+        with open(filepath, "rb") as f:
+            file_bytes = f.read()
+        raw_text = extract_text(file_bytes, filename)
+        if not raw_text or len(raw_text.strip()) < 5:
+            return {"error": "Не удалось извлечь текст из файла"}, 422
+
+        fields = {}
+        if llm.is_available():
+            try:
+                fields = llm.extract_property_fields(raw_text)
+            except Exception as e:
+                log = __import__("logging").getLogger(__name__)
+                log.warning("LLM extraction failed, falling back to regex: %s", e)
+                fields = parse_fields(raw_text)
+        else:
+            fields = parse_fields(raw_text)
+
+        return {"raw_text": raw_text[:3000], "fields": fields}
+    except Exception as e:
+        log = __import__("logging").getLogger(__name__)
+        log.exception("Property OCR from URL failed")
+        return {"error": f"Ошибка распознавания: {e}"}, 500
+
+
+@routes_bp.route("/tenants/ocr", methods=["POST"])
+@login_required
+@roles_for_form("ADMIN", "OWNER")
+def tenant_ocr():
+    file = request.files.get("file")
+    if not file or not file.filename:
+        return {"error": "Файл не выбран"}, 400
+
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    if ext not in ("pdf", "docx", "jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff", "tif"):
+        return {"error": f"Неподдерживаемый формат: .{ext}"}, 400
+
+    try:
+        file_bytes = file.read()
+        raw_text = extract_text(file_bytes, file.filename)
+        if not raw_text or len(raw_text.strip()) < 5:
+            return {"error": "Не удалось извлечь текст из файла"}, 422
+
+        fields = {}
+        if llm.is_available():
+            try:
+                fields = llm.extract_tenant_fields(raw_text)
+            except Exception as e:
+                log = __import__("logging").getLogger(__name__)
+                log.warning("LLM extraction failed, falling back to regex: %s", e)
+                fields = parse_tenant_fields(raw_text)
+        else:
+            fields = parse_tenant_fields(raw_text)
+
+        return {"raw_text": raw_text[:3000], "fields": fields}
+    except Exception as e:
+        log = __import__("logging").getLogger(__name__)
+        log.exception("Tenant OCR failed")
+        return {"error": f"Ошибка распознавания: {e}"}, 500
+
+
+@routes_bp.route("/tenants/<tid>/ocr-from-url", methods=["POST"])
+@login_required
+@roles_for_form("ADMIN", "OWNER")
+def tenant_ocr_from_url(tid):
+    """OCR on an already-uploaded tenant document."""
+    url = request.form.get("url", "").strip()
+    if not url:
+        return {"error": "URL не указан"}, 400
+
+    # Resolve file path from URL
+    filepath = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        "public", url.lstrip("/")
+    )
+    if not os.path.isfile(filepath):
+        return {"error": "Файл не найден"}, 404
+
+    filename = os.path.basename(filepath)
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if ext not in ("pdf", "docx", "jpg", "jpeg", "png", "gif", "webp", "bmp", "tiff", "tif"):
+        return {"error": f"Неподдерживаемый формат: .{ext}"}, 400
+
+    try:
+        with open(filepath, "rb") as f:
+            file_bytes = f.read()
+        raw_text = extract_text(file_bytes, filename)
+        if not raw_text or len(raw_text.strip()) < 5:
+            return {"error": "Не удалось извлечь текст из файла"}, 422
+
+        fields = {}
+        if llm.is_available():
+            try:
+                fields = llm.extract_tenant_fields(raw_text)
+            except Exception as e:
+                log = __import__("logging").getLogger(__name__)
+                log.warning("LLM extraction failed, falling back to regex: %s", e)
+                fields = parse_tenant_fields(raw_text)
+        else:
+            fields = parse_tenant_fields(raw_text)
+
+        return {"raw_text": raw_text[:3000], "fields": fields}
+    except Exception as e:
+        log = __import__("logging").getLogger(__name__)
+        log.exception("Tenant OCR from URL failed")
         return {"error": f"Ошибка распознавания: {e}"}, 500
 
 
@@ -536,9 +734,11 @@ def tenant_create():
     if request.method == "POST":
         d = db()
         try:
+            tid = str(uuid.uuid4())
+            doc_urls = _save_tenant_uploads(request.files.getlist("documents"), tid)
             d.execute(
                 insert(tenants).values(
-                    id=str(uuid.uuid4()),
+                    id=tid,
                     type=request.form.get("type", "LEGAL_ENTITY"),
                     name=request.form.get("name", ""),
                     inn=request.form.get("inn") or None,
@@ -556,6 +756,7 @@ def tenant_create():
                     bankBik=request.form.get("bankBik") or None,
                     bankAccount=request.form.get("bankAccount") or None,
                     bankCorrAccount=request.form.get("bankCorrAccount") or None,
+                    documentUrls=json.dumps(doc_urls) if doc_urls else None,
                     createdAt=datetime.now(),
                     updatedAt=datetime.now(),
                 )
@@ -584,6 +785,9 @@ def tenant_edit(tid):
             return redirect(url_for("routes.tenants_list"))
 
         if request.method == "POST":
+            existing_docs = json.loads(t.documentUrls) if t.documentUrls else []
+            new_docs = _save_tenant_uploads(request.files.getlist("documents"), tid)
+
             d.execute(
                 update(tenants)
                 .where(tenants.c.id == tid)
@@ -605,6 +809,7 @@ def tenant_edit(tid):
                     bankBik=request.form.get("bankBik") or None,
                     bankAccount=request.form.get("bankAccount") or None,
                     bankCorrAccount=request.form.get("bankCorrAccount") or None,
+                    documentUrls=json.dumps(existing_docs + new_docs) if (existing_docs or new_docs) else None,
                     updatedAt=datetime.now(),
                 )
             )
@@ -633,6 +838,46 @@ def tenant_delete(tid):
     finally:
         d.close()
     return redirect(url_for("routes.tenants_list"))
+
+
+@routes_bp.route("/tenants/<tid>/delete-document", methods=["POST"])
+@login_required
+@roles_for_form("ADMIN", "OWNER")
+def tenant_delete_document(tid):
+    url = request.form.get("url", "")
+    d = db()
+    try:
+        t = d.execute(select(tenants).where(tenants.c.id == tid)).first()
+        if not t or not t.documentUrls:
+            flash("Документ не найден", "error")
+            return redirect(url_for("routes.tenant_edit", tid=tid))
+        docs = json.loads(t.documentUrls) if t.documentUrls else []
+        if url in docs:
+            docs.remove(url)
+            try:
+                filepath = os.path.join(
+                    os.path.dirname(os.path.dirname(__file__)),
+                    "public", url.lstrip("/")
+                )
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+            except Exception:
+                pass
+            d.execute(
+                update(tenants)
+                .where(tenants.c.id == tid)
+                .values(documentUrls=json.dumps(docs) if docs else None, updatedAt=datetime.now())
+            )
+            d.commit()
+            flash("Документ удалён", "success")
+        else:
+            flash("Документ не найден в списке", "error")
+    except Exception as e:
+        d.rollback()
+        flash(f"Ошибка: {e}", "error")
+    finally:
+        d.close()
+    return redirect(url_for("routes.tenant_edit", tid=tid))
 
 
 # ── contracts ─────────────────────────────────────────────
@@ -1012,6 +1257,15 @@ def _parse_date(val):
         return None
 
 
+def _safe_name(original: str) -> str:
+    import re
+    name = os.path.splitext(os.path.basename(original))[0]
+    name = re.sub(r'[\\/]', '_', name)
+    name = re.sub(r'\s+', '_', name)
+    name = re.sub(r'[^\w\-.]', '', name)
+    return name[:60] if len(name) > 60 else name
+
+
 def _save_uploads(files, property_id: str, subdir: str) -> list:
     """Save uploaded files and return list of relative URL paths.
     For images also generates a thumbnail (300x200, fit)."""
@@ -1029,7 +1283,8 @@ def _save_uploads(files, property_id: str, subdir: str) -> list:
         ext = os.path.splitext(f.filename)[1].lower()
         if ext not in ALLOWED_EXTENSIONS:
             continue
-        filename = f"{uuid.uuid4().hex}{ext}"
+        safe = _safe_name(f.filename) or "file"
+        filename = f"{safe}_{uuid.uuid4().hex[:4]}{ext}"
         os.makedirs(upload_base, exist_ok=True)
         filepath = os.path.join(upload_base, filename)
         f.save(filepath)
@@ -1051,6 +1306,28 @@ def _generate_thumbnail(filepath: str, size: tuple = (300, 200)) -> None:
             im.thumbnail(size, Image.LANCZOS)
             if im.mode in ("RGBA", "P"):
                 im = im.convert("RGB")
-            im.save(thumb_path, "JPEG", quality=85)
+            im.save(thumb_path, "JPEG", quality=60)
     except Exception:
         pass
+
+
+def _save_tenant_uploads(files, tenant_id: str) -> list:
+    urls = []
+    upload_base = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)),
+        "public", "uploads", "tenants", tenant_id,
+    )
+    ALLOWED = {".pdf", ".jpg", ".jpeg", ".png", ".gif", ".webp", ".docx", ".doc", ".xlsx", ".xls"}
+    for f in files:
+        if not f or not f.filename:
+            continue
+        ext = os.path.splitext(f.filename)[1].lower()
+        if ext not in ALLOWED:
+            continue
+        safe = _safe_name(f.filename) or "file"
+        filename = f"{safe}_{uuid.uuid4().hex[:4]}{ext}"
+        os.makedirs(upload_base, exist_ok=True)
+        filepath = os.path.join(upload_base, filename)
+        f.save(filepath)
+        urls.append(f"/uploads/tenants/{tenant_id}/{filename}")
+    return urls

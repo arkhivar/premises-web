@@ -33,13 +33,6 @@ def create_app():
     @app.template_filter("thumb_url")
     def thumb_url_filter(value):
         if not value:
-            return value
-        base, ext = _os.path.splitext(value)
-        return f"{base}_thumb{ext}"
-
-    @app.template_filter("thumb_url")
-    def thumb_url_filter(value):
-        if not value:
             return ""
         if isinstance(value, list):
             return [thumb_url_filter(v) for v in value]
@@ -98,6 +91,29 @@ def create_app():
         import os as _os
 
         upload_dir = _os.path.join(app.root_path, "..", "public", "uploads", "properties")
+        filepath = _os.path.join(upload_dir, filename)
+
+        # Generate missing thumbnails on-the-fly
+        if not _os.path.exists(filepath) and "_thumb" in filename:
+            dirname = _os.path.dirname(filename)
+            basename = _os.path.basename(filename)
+            name, ext = _os.path.splitext(basename)
+            if name.endswith("_thumb"):
+                original_name = name[:-6] + ext
+                original_path = _os.path.join(upload_dir, dirname, original_name)
+                if _os.path.exists(original_path):
+                    from app.routes import _generate_thumbnail
+                    _generate_thumbnail(original_path)
+
+        return send_from_directory(upload_dir, filename)
+
+    # Serve uploaded tenant files
+    @app.route("/uploads/tenants/<path:filename>")
+    def serve_tenant_upload(filename):
+        from flask import send_from_directory
+        import os as _os
+
+        upload_dir = _os.path.join(app.root_path, "..", "public", "uploads", "tenants")
         return send_from_directory(upload_dir, filename)
 
     return app

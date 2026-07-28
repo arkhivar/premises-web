@@ -81,7 +81,6 @@ def parse_fields(raw_text: str) -> dict:
     result.update(_extract_address(t, raw_text))
     result.update(_extract_type(t))
     result.update(_extract_name(t, result))
-    result.update(_extract_owner_info(t))
 
     return result
 
@@ -226,15 +225,284 @@ def _extract_name(text: str, existing: dict) -> dict:
     return {}
 
 
-def _extract_owner_info(text: str) -> dict:
-    # Some documents contain ownership info that might help set isPersonal
-    owner_pat = re.compile(
-        r"(?:собственник|правообладатель|владелец)\s*[:]?\s*(.*?)(?:\n|$)", re.I
-    )
-    m = owner_pat.search(text)
-    if m:
-        owner_name = m.group(1).strip().rstrip(".,;: ")
-        # If it looks like an individual (contains name), suggest personal
-        # but we don't auto-set checkbox
-        pass
+# ── tenant field extraction ─────────────────────────────────
+
+
+def parse_tenant_fields(raw_text: str) -> dict:
+    result = {}
+    t = _clean(raw_text)
+
+    result.update(_extract_tenant_type(t))
+    result.update(_extract_tenant_name(t, result))
+    result.update(_extract_inn(t))
+    result.update(_extract_kpp(t))
+    result.update(_extract_ogrn(t))
+    result.update(_extract_legal_address(t))
+    result.update(_extract_phone(t))
+    result.update(_extract_email(t))
+    result.update(_extract_bank_name(t))
+    result.update(_extract_bik(t))
+    result.update(_extract_bank_account(t))
+    result.update(_extract_bank_corr_account(t))
+    result.update(_extract_passport_series(t))
+    result.update(_extract_passport_number(t))
+    result.update(_extract_registration_address(t))
+
+    return result
+
+
+_TENANT_TYPE_PATTERNS = [
+    (re.compile(r"\b(?:ООО|АО|ПАО|ЗАО|НАО|ОАО|НО)\b", re.I), "LEGAL_ENTITY"),
+    (re.compile(r"\bИП\b", re.I), "ENTREPRENEUR"),
+]
+
+
+def _extract_tenant_type(text: str) -> dict:
+    best_pos = len(text)
+    best_type = None
+    for pat, ttype in _TENANT_TYPE_PATTERNS:
+        m = pat.search(text)
+        if m and m.start() < best_pos:
+            best_pos = m.start()
+            best_type = ttype
+    if best_type:
+        return {"type": best_type}
     return {}
+
+
+_TENANT_NAME_PATTERNS = [
+    re.compile(
+        r"(?:полное\s+)?наименование\s*(?:организации|компании|предприятия)?\s*[:]?\s*"
+        r"(.*?)(?:\n|$)",
+        re.I,
+    ),
+    re.compile(r"\bИП\s+([А-ЯЁ][а-яё]+(?:\s+[А-ЯЁ][а-яё]+){0,2})", re.I),
+    re.compile(r"\b(?:ООО|АО|ПАО|ЗАО|НАО|ОАО|НО)\s+[\"«]?(.*?)[\"»]?(?:\s*[,.\n]|$)", re.I),
+]
+
+
+def _extract_tenant_name(text: str, existing: dict) -> dict:
+    ttype = existing.get("type")
+    patterns = list(_TENANT_NAME_PATTERNS)
+    if ttype == "ENTREPRENEUR":
+        patterns.sort(key=lambda p: 0 if p.pattern.startswith(r"\bИП") else 1)
+    elif ttype == "LEGAL_ENTITY":
+        patterns.sort(key=lambda p: 0 if r"ООО|АО" in p.pattern else 1)
+    for pat in patterns:
+        m = pat.search(text)
+        if not m:
+            continue
+        name = m.group(1).strip().rstrip('.,;: ')
+        if len(name) < 2:
+            continue
+        if ttype == "ENTREPRENEUR" and pat.pattern.startswith(r"\bИП"):
+            return {"name": "ИП " + name}
+        return {"name": name}
+    return {}
+
+
+_INN_PATTERN = re.compile(
+    r"(?:ИИН|ИНН|inn)\s*[:\s]*\(?(\d[\d\s]{8,11}\d)", re.I
+)
+
+
+def _extract_inn(text: str) -> dict:
+    m = _INN_PATTERN.search(text)
+    if m:
+        val = m.group(1).replace(" ", "").replace("-", "")
+        if len(val) in (10, 12):
+            return {"inn": val}
+    fallback = re.search(r"\b(\d{10})\b", text)
+    if fallback:
+        return {"inn": fallback.group(1)}
+    return {}
+
+
+_KPP_PATTERN = re.compile(r"КПП\s*[:\s]*(\d[\d\s]{7,8}\d)", re.I)
+
+
+def _extract_kpp(text: str) -> dict:
+    m = _KPP_PATTERN.search(text)
+    if m:
+        val = m.group(1).replace(" ", "").replace("-", "")
+        if len(val) == 9:
+            return {"kpp": val}
+    return {}
+
+
+_OGRN_PATTERN = re.compile(
+    r"ОГРНИП\s*[:\s]*(\d[\d\s]{13,14}\d)|"
+    r"ОГРН\s*[:\s]*(\d[\d\s]{11,12}\d)",
+    re.I,
+)
+
+
+def _extract_ogrn(text: str) -> dict:
+    m = _OGRN_PATTERN.search(text)
+    if m:
+        val = (m.group(1) or m.group(2) or "").replace(" ", "").replace("-", "")
+        if len(val) in (13, 15):
+            return {"ogrn": val}
+    return {}
+
+
+_LEGAL_ADDR_PATTERNS = [
+    re.compile(
+        r"(?:юридическ(?:ий|ое|ая)\s+адрес|юр[.]?\s*адрес|адрес\s*(?:места\s+)?нахождени[яю])"
+        r"\s*[:]?\s*(.*?)(?:\n|Фактический|Почтовый|ИНН|ОГРН|Тел|Телефон|$)",
+        re.I | re.S,
+    ),
+    re.compile(
+        r"(?:адрес\s*(?:места\s+)?нахождени[яю]|место\s+нахождени[яю])\s*[:]?\s*(.*?)(?:\n|ИНН|ОГРН|Тел|$)",
+        re.I | re.S,
+    ),
+]
+
+
+def _extract_legal_address(text: str) -> dict:
+    for pat in _LEGAL_ADDR_PATTERNS:
+        m = pat.search(text)
+        if m:
+            addr = m.group(1).strip().rstrip(".,;: ")
+            addr = re.sub(r"\s+", " ", addr)
+            if len(addr) > 5:
+                return {"legalAddress": addr}
+    return {}
+
+
+_PHONE_PATTERN = re.compile(
+    r"(?:тел(?:ефон)?|моб(?:ильный)?|факс)\s*[:\s]*"
+    r"((?:\+7|8)(?:[\s\-()]*\d){10})",
+    re.I,
+)
+_PHONE_FALLBACK = re.compile(r"(\+(?:7|3)\d[\s\-()]*\d{3}[\s\-()]*\d{3}[\s\-()]*\d{2}[\s\-()]*\d{2})\b")
+
+
+def _extract_phone(text: str) -> dict:
+    m = _PHONE_PATTERN.search(text)
+    if m:
+        return {"phone": m.group(1).strip()}
+    m = _PHONE_FALLBACK.search(text)
+    if m:
+        return {"phone": m.group(1).strip()}
+    return {}
+
+
+_EMAIL_PATTERN = re.compile(
+    r"(?:e-?mail|эл[.]?\s*почта|почта)\s*[:\s]*([^\s,;]+@[^\s,;]+)",
+    re.I,
+)
+_EMAIL_FALLBACK = re.compile(r"\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b")
+
+
+def _extract_email(text: str) -> dict:
+    m = _EMAIL_PATTERN.search(text)
+    if m:
+        return {"email": m.group(1).strip()}
+    m = _EMAIL_FALLBACK.search(text)
+    if m:
+        return {"email": m.group(1).strip()}
+    return {}
+
+
+_BANK_NAME_PATTERNS = [
+    re.compile(r"(?:наименование\s+)?банк(?:а|е)?\s*[:]?\s*(.*?)(?:\n|БИК|К/с|Р/с|Корр|$)", re.I | re.S),
+    re.compile(r"в\s+банке\s+(.*?)(?:\n|БИК|К/с|Р/с|Корр|$)", re.I | re.S),
+]
+
+
+def _extract_bank_name(text: str) -> dict:
+    for pat in _BANK_NAME_PATTERNS:
+        m = pat.search(text)
+        if m:
+            name = m.group(1).strip().rstrip('.,;: «»""')
+            if len(name) > 3:
+                return {"bankName": name}
+    return {}
+
+
+_BIK_PATTERN = re.compile(r"БИК\s*[:\s]*(\d{9})", re.I)
+
+
+def _extract_bik(text: str) -> dict:
+    m = _BIK_PATTERN.search(text)
+    if m:
+        return {"bankBik": m.group(1)}
+    return {}
+
+
+_BANK_ACCOUNT_PATTERN = re.compile(
+    r"(?:р/с|расч[ёе]тн(?:ый|ая)\s+(?:сч[ёе]т|сч\.))\s*(?:№\s*)?[:\s]*"
+    r"(\d[\d\s]{18,19}\d)",
+    re.I,
+)
+
+
+def _extract_bank_account(text: str) -> dict:
+    m = _BANK_ACCOUNT_PATTERN.search(text)
+    if m:
+        val = m.group(1).replace(" ", "").replace("-", "")
+        if len(val) == 20:
+            return {"bankAccount": val}
+    return {}
+
+
+_CORR_ACCOUNT_PATTERN = re.compile(
+    r"(?:к/с|корр(?:еспондентск(?:ий|ая))?\s+(?:сч[ёе]т|сч\.))\s*(?:№\s*)?[:\s]*"
+    r"(\d[\d\s]{18,19}\d)",
+    re.I,
+)
+
+
+def _extract_bank_corr_account(text: str) -> dict:
+    m = _CORR_ACCOUNT_PATTERN.search(text)
+    if m:
+        val = m.group(1).replace(" ", "").replace("-", "")
+        if len(val) == 20:
+            return {"bankCorrAccount": val}
+    return {}
+
+
+_PASSPORT_SERIES_PATTERN = re.compile(
+    r"(?:серия)\s*(?:паспорта)?\s*[:\s]*(\d{2}\s*\d{2})", re.I
+)
+
+
+def _extract_passport_series(text: str) -> dict:
+    m = _PASSPORT_SERIES_PATTERN.search(text)
+    if m:
+        return {"passportSeries": m.group(1).replace(" ", "")}
+    return {}
+
+
+_PASSPORT_NUMBER_PATTERN = re.compile(
+    r"(?:номер)\s*(?:паспорта)?\s*[:\s]*(\d{6})", re.I
+)
+
+
+def _extract_passport_number(text: str) -> dict:
+    m = _PASSPORT_NUMBER_PATTERN.search(text)
+    if m:
+        return {"passportNumber": m.group(1)}
+    return {}
+
+
+_REG_ADDR_PATTERNS = [
+    re.compile(
+        r"(?:адрес\s+регистрации|место\s+жительства|адрес\s+проживания|регистраци[яю]\s+по\s+месту\s+жительства)"
+        r"\s*[:]?\s*(.*?)(?:\n|Паспорт|ИНН|Тел|Телефон|$)",
+        re.I | re.S,
+    ),
+]
+
+
+def _extract_registration_address(text: str) -> dict:
+    for pat in _REG_ADDR_PATTERNS:
+        m = pat.search(text)
+        if m:
+            addr = m.group(1).strip().rstrip(".,;: ")
+            addr = re.sub(r"\s+", " ", addr)
+            if len(addr) > 5:
+                return {"registrationAddress": addr}
+    return {}
+

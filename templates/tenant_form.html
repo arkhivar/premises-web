@@ -4,104 +4,370 @@
   <h1>{% if tenant %}Редактировать{% else %}Добавить{% endif %} арендатора</h1>
 </div>
 
-<div class="card form-card">
-  <form method="post" class="form">
-    <label class="field">
-      <span>Тип</span>
-      <select name="type" class="input" id="tenantType">
-        <option value="LEGAL_ENTITY" {% if tenant and tenant.type == 'LEGAL_ENTITY' %}selected{% endif %}>Юридическое лицо</option>
-        <option value="ENTREPRENEUR" {% if tenant and tenant.type == 'ENTREPRENEUR' %}selected{% endif %}>ИП</option>
-        <option value="INDIVIDUAL" {% if tenant and tenant.type == 'INDIVIDUAL' %}selected{% endif %}>Физическое лицо</option>
-      </select>
-    </label>
+<div class="split-layout">
+  <div class="split-main">
+    <div class="card form-card">
+      <form method="post" enctype="multipart/form-data" class="form" id="tenantForm">
+        <div class="form-row" style="align-items: center;">
+          <label class="field" style="margin-bottom: 0;">
+            <span>Тип</span>
+            <select name="type" class="input" id="tenantType">
+              <option value="LEGAL_ENTITY" {% if tenant and tenant.type == 'LEGAL_ENTITY' %}selected{% endif %}>Юридическое лицо</option>
+              <option value="ENTREPRENEUR" {% if tenant and tenant.type == 'ENTREPRENEUR' %}selected{% endif %}>ИП</option>
+              <option value="INDIVIDUAL" {% if tenant and tenant.type == 'INDIVIDUAL' %}selected{% endif %}>Физическое лицо</option>
+            </select>
+          </label>
+          <button type="button"
+                  id="ai-fill-btn"
+                  class="btn btn-ghost"
+                  style="height: 2.25rem; margin-top: 1.5rem;"
+                  {% if not tenant %}disabled title="Сохраните карточку, чтобы использовать AI-заполнение"{% endif %}>
+            ✨ Заполнить из документов
+          </button>
+        </div>
 
-    <label class="field">
-      <span>{% if tenant and tenant.type == 'INDIVIDUAL' %}ФИО{% else %}Наименование{% endif %}</span>
-      <input type="text" name="name" value="{{ tenant.name if tenant else '' }}" required class="input">
-    </label>
+        <div class="ocr-status" id="ocr-status" style="margin-top: -0.5rem;"></div>
 
-    <div class="form-row">
-      <label class="field">
-        <span>ИНН</span>
-        <input type="text" name="inn" value="{{ tenant.inn if tenant and tenant.inn else '' }}" placeholder="10 цифр" class="input">
-      </label>
-      <label class="field">
-        <span>КПП</span>
-        <input type="text" name="kpp" value="{{ tenant.kpp if tenant and tenant.kpp else '' }}" class="input">
-      </label>
+        <hr class="form-divider">
+
+        <label class="field">
+          <span>{% if tenant and tenant.type == 'INDIVIDUAL' %}ФИО{% else %}Наименование{% endif %}</span>
+          <input type="text" name="name" value="{{ tenant.name if tenant else '' }}" required class="input">
+        </label>
+
+        <div class="form-row">
+          <label class="field">
+            <span>ИНН</span>
+            <input type="text" name="inn" value="{{ tenant.inn if tenant and tenant.inn else '' }}" placeholder="10 цифр" class="input">
+          </label>
+          <label class="field">
+            <span>КПП</span>
+            <input type="text" name="kpp" value="{{ tenant.kpp if tenant and tenant.kpp else '' }}" class="input">
+          </label>
+        </div>
+
+        <label class="field">
+          <span>ОГРН</span>
+          <input type="text" name="ogrn" value="{{ tenant.ogrn if tenant and tenant.ogrn else '' }}" class="input">
+        </label>
+
+        <label class="field">
+          <span>Юридический адрес</span>
+          <input type="text" name="legalAddress" value="{{ tenant.legalAddress if tenant and tenant.legalAddress else '' }}" class="input">
+        </label>
+
+        <fieldset class="fieldset">
+          <legend>Паспортные данные (для физлиц)</legend>
+          <div class="form-row">
+            <label class="field">
+              <span>Серия паспорта</span>
+              <input type="text" name="passportSeries" value="{{ tenant.passportSeries if tenant and tenant.passportSeries else '' }}" class="input">
+            </label>
+            <label class="field">
+              <span>Номер паспорта</span>
+              <input type="text" name="passportNumber" value="{{ tenant.passportNumber if tenant and tenant.passportNumber else '' }}" class="input">
+            </label>
+          </div>
+          <label class="field">
+            <span>Кем выдан</span>
+            <input type="text" name="passportIssuedBy" value="{{ tenant.passportIssuedBy if tenant and tenant.passportIssuedBy else '' }}" class="input">
+          </label>
+          <label class="field">
+            <span>Дата выдачи</span>
+            <input type="date" name="passportIssuedDate" value="{{ tenant.passportIssuedDate.strftime('%Y-%m-%d') if tenant and tenant.passportIssuedDate else '' }}" class="input">
+          </label>
+          <label class="field">
+            <span>Адрес регистрации</span>
+            <input type="text" name="registrationAddress" value="{{ tenant.registrationAddress if tenant and tenant.registrationAddress else '' }}" class="input">
+          </label>
+        </fieldset>
+
+        <div class="form-row">
+          <label class="field">
+            <span>Телефон</span>
+            <input type="text" name="phone" value="{{ tenant.phone if tenant and tenant.phone else '' }}" class="input">
+          </label>
+          <label class="field">
+            <span>Email</span>
+            <input type="email" name="email" value="{{ tenant.email if tenant and tenant.email else '' }}" class="input">
+          </label>
+        </div>
+
+        <fieldset class="fieldset">
+          <legend>Банковские реквизиты</legend>
+          <label class="field">
+            <span>Наименование банка</span>
+            <input type="text" name="bankName" value="{{ tenant.bankName if tenant and tenant.bankName else '' }}" class="input">
+          </label>
+          <label class="field">
+            <span>БИК</span>
+            <input type="text" name="bankBik" value="{{ tenant.bankBik if tenant and tenant.bankBik else '' }}" class="input">
+          </label>
+          <label class="field">
+            <span>Расчётный счёт</span>
+            <input type="text" name="bankAccount" value="{{ tenant.bankAccount if tenant and tenant.bankAccount else '' }}" class="input">
+          </label>
+          <label class="field">
+            <span>Корреспондентский счёт</span>
+            <input type="text" name="bankCorrAccount" value="{{ tenant.bankCorrAccount if tenant and tenant.bankCorrAccount else '' }}" class="input">
+          </label>
+        </fieldset>
+
+        <div class="form-actions">
+          <a href="/tenants" class="btn btn-outline">Отмена</a>
+          <button type="submit" class="btn btn-primary">{% if tenant %}Сохранить{% else %}Добавить{% endif %}</button>
+        </div>
+      </form>
     </div>
+  </div>
 
-    <label class="field">
-      <span>ОГРН</span>
-      <input type="text" name="ogrn" value="{{ tenant.ogrn if tenant and tenant.ogrn else '' }}" class="input">
-    </label>
-
-    <label class="field">
-      <span>Юридический адрес</span>
-      <input type="text" name="legalAddress" value="{{ tenant.legalAddress if tenant and tenant.legalAddress else '' }}" class="input">
-    </label>
-
-    <fieldset class="fieldset">
-      <legend>Паспортные данные (для физлиц)</legend>
-      <div class="form-row">
-        <label class="field">
-          <span>Серия паспорта</span>
-          <input type="text" name="passportSeries" value="{{ tenant.passportSeries if tenant and tenant.passportSeries else '' }}" class="input">
-        </label>
-        <label class="field">
-          <span>Номер паспорта</span>
-          <input type="text" name="passportNumber" value="{{ tenant.passportNumber if tenant and tenant.passportNumber else '' }}" class="input">
-        </label>
+  <div class="split-side">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-header-row">
+          <span class="card-title">Документы</span>
+          {% if tenant and tenant.documentUrls %}
+            {% set doc_count = tenant.documentUrls|from_json|length %}
+            <span class="text-sm text-muted">{{ doc_count }}</span>
+          {% endif %}
+        </div>
       </div>
-      <label class="field">
-        <span>Кем выдан</span>
-        <input type="text" name="passportIssuedBy" value="{{ tenant.passportIssuedBy if tenant and tenant.passportIssuedBy else '' }}" class="input">
-      </label>
-      <label class="field">
-        <span>Дата выдачи</span>
-        <input type="date" name="passportIssuedDate" value="{{ tenant.passportIssuedDate.strftime('%Y-%m-%d') if tenant and tenant.passportIssuedDate else '' }}" class="input">
-      </label>
-      <label class="field">
-        <span>Адрес регистрации</span>
-        <input type="text" name="registrationAddress" value="{{ tenant.registrationAddress if tenant and tenant.registrationAddress else '' }}" class="input">
-      </label>
-    </fieldset>
+      <div class="card-body">
+        {% if tenant %}
+          <form method="post" enctype="multipart/form-data" class="form" action="/tenants/{{ tenant.id }}/edit">
+            <label class="field">
+              <span>Добавить файлы</span>
+              <input type="file" name="documents" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.docx,.doc,.xlsx,.xls" multiple class="input-file">
+            </label>
+            <button type="submit" class="btn btn-outline btn-full">Загрузить</button>
+          </form>
 
-    <div class="form-row">
-      <label class="field">
-        <span>Телефон</span>
-        <input type="text" name="phone" value="{{ tenant.phone if tenant and tenant.phone else '' }}" class="input">
-      </label>
-      <label class="field">
-        <span>Email</span>
-        <input type="email" name="email" value="{{ tenant.email if tenant and tenant.email else '' }}" class="input">
-      </label>
+          {% if tenant.documentUrls %}
+            {% set docs = tenant.documentUrls|from_json %}
+            {% if docs %}
+              <div class="upload-docs" id="tenant-docs-list" style="margin-top: 1rem;">
+                {% for url in docs %}
+                  <div class="doc-row" data-doc-url="{{ url }}">
+                    <a href="{{ url }}" target="_blank" class="doc-link">{{ url.split('/')[-1] }}</a>
+                    <button type="button" class="btn btn-ghost btn-sm btn-danger" title="Удалить" data-delete-url="/tenants/{{ tenant.id }}/delete-document" data-delete-field="url" data-delete-value="{{ url }}">✕</button>
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <p class="text-muted text-sm" id="tenant-docs-empty" style="margin-top: 1rem;">Нет загруженных документов</p>
+            {% endif %}
+          {% else %}
+            <p class="text-muted text-sm" id="tenant-docs-empty" style="margin-top: 1rem;">Нет загруженных документов</p>
+          {% endif %}
+        {% else %}
+          <p class="text-muted text-sm">Документы можно загрузить после создания арендатора. Сначала сохраните карточку, затем добавьте файлы.</p>
+        {% endif %}
+      </div>
     </div>
-
-    <fieldset class="fieldset">
-      <legend>Банковские реквизиты</legend>
-      <label class="field">
-        <span>Наименование банка</span>
-        <input type="text" name="bankName" value="{{ tenant.bankName if tenant and tenant.bankName else '' }}" class="input">
-      </label>
-      <label class="field">
-        <span>БИК</span>
-        <input type="text" name="bankBik" value="{{ tenant.bankBik if tenant and tenant.bankBik else '' }}" class="input">
-      </label>
-      <label class="field">
-        <span>Расчётный счёт</span>
-        <input type="text" name="bankAccount" value="{{ tenant.bankAccount if tenant and tenant.bankAccount else '' }}" class="input">
-      </label>
-      <label class="field">
-        <span>Корреспондентский счёт</span>
-        <input type="text" name="bankCorrAccount" value="{{ tenant.bankCorrAccount if tenant and tenant.bankCorrAccount else '' }}" class="input">
-      </label>
-    </fieldset>
-
-    <div class="form-actions">
-      <a href="/tenants" class="btn btn-outline">Отмена</a>
-      <button type="submit" class="btn btn-primary">{% if tenant %}Сохранить{% else %}Добавить{% endif %}</button>
-    </div>
-  </form>
+  </div>
 </div>
+
+<!-- AI Fill Modal -->
+<div class="modal-overlay" id="ai-modal" style="display:none">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <span class="modal-title">✨ Заполнить из документа</span>
+      <button type="button" class="modal-close" id="ai-modal-close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p class="text-sm text-muted" style="margin-bottom: 0.75rem;">
+        Выберите документ из правой панели. AI проанализирует его и заполнит поля автоматически.
+      </p>
+      <div id="ai-modal-docs">
+        <!-- Populated by JS -->
+      </div>
+      <div class="ocr-raw" id="ai-modal-raw" style="display:none; margin-top: 1rem;">
+        <div class="ocr-raw-header">
+          <span class="ocr-raw-title">Распознанный текст:</span>
+          <button type="button" class="ocr-raw-toggle" id="ai-modal-raw-toggle">Показать</button>
+        </div>
+        <pre class="ocr-raw-text" id="ai-modal-raw-text" style="display:none"></pre>
+      </div>
+      <div class="ocr-fields" id="ai-modal-fields" style="display:none; margin-top: 0.75rem;">
+        <span class="ocr-fields-title">Найдены поля:</span>
+        <div id="ai-modal-fields-list"></div>
+      </div>
+      <div id="ai-modal-status" class="ocr-status" style="margin-top: 0.75rem;"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  // ── AI Fill Modal ──
+  var aiBtn = document.getElementById('ai-fill-btn');
+  var aiModal = document.getElementById('ai-modal');
+  var aiModalClose = document.getElementById('ai-modal-close');
+  var aiModalDocs = document.getElementById('ai-modal-docs');
+  var aiModalStatus = document.getElementById('ai-modal-status');
+  var aiModalRaw = document.getElementById('ai-modal-raw');
+  var aiModalRawText = document.getElementById('ai-modal-raw-text');
+  var aiModalRawToggle = document.getElementById('ai-modal-raw-toggle');
+  var aiModalFields = document.getElementById('ai-modal-fields');
+  var aiModalFieldsList = document.getElementById('ai-modal-fields-list');
+
+  var tenantId = '{{ tenant.id if tenant else "" }}';
+
+  var fieldLabels = {
+    type: 'Тип',
+    name: 'Наименование',
+    inn: 'ИНН',
+    kpp: 'КПП',
+    ogrn: 'ОГРН',
+    legalAddress: 'Юр. адрес',
+    phone: 'Телефон',
+    email: 'Email',
+    bankName: 'Банк',
+    bankBik: 'БИК',
+    bankAccount: 'Р/с',
+    bankCorrAccount: 'К/с',
+    passportSeries: 'Серия паспорта',
+    passportNumber: 'Номер паспорта',
+    registrationAddress: 'Адрес регистрации'
+  };
+
+  var typeLabels = {
+    'LEGAL_ENTITY': 'Юрлицо',
+    'ENTREPRENEUR': 'ИП',
+    'INDIVIDUAL': 'Физлицо'
+  };
+
+  function openModal() {
+    aiModalStatus.textContent = '';
+    aiModalRaw.style.display = 'none';
+    aiModalFields.style.display = 'none';
+
+    // Build document list from right panel
+    var docRows = document.querySelectorAll('#tenant-docs-list .doc-row[data-doc-url]');
+    if (docRows.length === 0) {
+      aiModalDocs.innerHTML = '<p class="text-muted text-sm">Нет загруженных документов. Загрузите файлы в правую панель.</p>';
+    } else {
+      var html = '<div class="ai-doc-list">';
+      docRows.forEach(function(row) {
+        var url = row.getAttribute('data-doc-url');
+        var name = url.split('/').pop();
+        html += '<div class="ai-doc-item">' +
+          '<span class="ai-doc-name">' + name + '</span>' +
+          '<button type="button" class="btn btn-sm btn-outline ai-doc-btn" data-url="' + url + '">Распознать</button>' +
+          '</div>';
+      });
+      html += '</div>';
+      aiModalDocs.innerHTML = html;
+
+      aiModalDocs.querySelectorAll('.ai-doc-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          runOcr(btn.getAttribute('data-url'));
+        });
+      });
+    }
+
+    aiModal.style.display = 'flex';
+  }
+
+  function closeModal() {
+    aiModal.style.display = 'none';
+  }
+
+  if (aiBtn) {
+    aiBtn.addEventListener('click', openModal);
+  }
+  if (aiModalClose) {
+    aiModalClose.addEventListener('click', closeModal);
+  }
+  aiModal.addEventListener('click', function(e) {
+    if (e.target === aiModal) closeModal();
+  });
+
+  function runOcr(url) {
+    aiModalStatus.textContent = 'Распознаю...';
+    aiModalStatus.className = 'ocr-status ocr-status-loading';
+    aiModalRaw.style.display = 'none';
+    aiModalFields.style.display = 'none';
+
+    // Disable all doc buttons
+    aiModalDocs.querySelectorAll('.ai-doc-btn').forEach(function(b) { b.disabled = true; });
+
+    var fd = new FormData();
+    fd.append('url', url);
+
+    fetch('/tenants/' + tenantId + '/ocr-from-url', { method: 'POST', body: fd })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        // Re-enable buttons
+        aiModalDocs.querySelectorAll('.ai-doc-btn').forEach(function(b) { b.disabled = false; });
+
+        if (data.error) {
+          aiModalStatus.textContent = 'Ошибка: ' + data.error;
+          aiModalStatus.className = 'ocr-status ocr-status-error';
+          return;
+        }
+        aiModalStatus.textContent = 'Готово! Поля заполнены.';
+        aiModalStatus.className = 'ocr-status ocr-status-ok';
+
+        if (data.raw_text) {
+          aiModalRawText.textContent = data.raw_text;
+          aiModalRaw.style.display = 'block';
+        }
+
+        var fields = data.fields || {};
+        var hasFields = false;
+        var listHtml = '';
+        for (var key in fieldLabels) {
+          if (fields[key] !== undefined && fields[key] !== null && fields[key] !== '') {
+            hasFields = true;
+            var displayVal = key === 'type' ? (typeLabels[fields[key]] || fields[key]) : fields[key];
+            listHtml += '<span class="ocr-field-tag">' + fieldLabels[key] + ': <strong>' + displayVal + '</strong></span>';
+          }
+        }
+        if (hasFields) {
+          aiModalFieldsList.innerHTML = listHtml;
+          aiModalFields.style.display = 'block';
+        }
+
+        // Fill the actual form
+        var allFields = ['type','name','inn','kpp','ogrn','legalAddress','phone','email',
+                         'bankName','bankBik','bankAccount','bankCorrAccount',
+                         'passportSeries','passportNumber','registrationAddress'];
+        allFields.forEach(function(key) {
+          if (fields[key] !== undefined && fields[key] !== null && fields[key] !== '') {
+            var el = document.querySelector('#tenantForm [name="' + key + '"]');
+            if (el) el.value = fields[key];
+          }
+        });
+      })
+      .catch(function(err) {
+        aiModalDocs.querySelectorAll('.ai-doc-btn').forEach(function(b) { b.disabled = false; });
+        aiModalStatus.textContent = 'Ошибка сети: ' + err.message;
+        aiModalStatus.className = 'ocr-status ocr-status-error';
+      });
+  }
+
+  aiModalRawToggle.addEventListener('click', function() {
+    var hidden = aiModalRawText.style.display === 'none';
+    aiModalRawText.style.display = hidden ? 'block' : 'none';
+    aiModalRawToggle.textContent = hidden ? 'Скрыть' : 'Показать';
+  });
+
+  // ── Delete buttons ──
+  document.querySelectorAll('[data-delete-url]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var url = btn.getAttribute('data-delete-url');
+      var field = btn.getAttribute('data-delete-field');
+      var value = btn.getAttribute('data-delete-value');
+      if (!confirm('Удалить документ?')) return;
+
+      var fd = new FormData();
+      fd.append(field, value);
+      fetch(url, { method: 'POST', body: fd })
+        .then(function() { window.location.reload(); })
+        .catch(function() { alert('Ошибка удаления'); });
+    });
+  });
+})();
+</script>
 {% endblock %}

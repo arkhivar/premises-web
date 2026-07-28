@@ -25,10 +25,3 @@ tenants = metadata.tables["Tenant"]
 contracts = metadata.tables["Contract"]
 contract_templates = metadata.tables["ContractTemplate"]
 
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()

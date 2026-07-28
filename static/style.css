@@ -1106,3 +1106,199 @@ select.input { cursor: pointer; }
   border: 1px solid #bbf7d0;
 }
 
+/* ── split layout (form + sidebar) ───────── */
+
+.split-layout {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+
+.split-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.split-main .form-card {
+  max-width: none;
+}
+
+.split-side {
+  width: 320px;
+  flex-shrink: 0;
+  position: sticky;
+  top: calc(3.5rem + 1.5rem);
+}
+
+@media (max-width: 900px) {
+  .split-layout {
+    flex-direction: column;
+  }
+  .split-side {
+    width: 100%;
+    position: static;
+  }
+}
+
+/* ── modal ───────────────────────────────── */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.4);
+  padding: 1rem;
+}
+
+.modal-dialog {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) + 2px);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+  width: 100%;
+  max-width: 480px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-title {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  color: var(--muted-fg);
+  cursor: pointer;
+  line-height: 1;
+  padding: 0.25rem;
+}
+.modal-close:hover { color: var(--fg); }
+
+.modal-body {
+  padding: 1.25rem;
+  overflow-y: auto;
+}
+
+/* ── AI doc list in modal ────────────────── */
+
+.ai-doc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ai-doc-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--muted);
+}
+
+.ai-doc-name {
+  font-size: 0.875rem;
+  word-break: break-all;
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── document checklist ──────────────────── */
+
+.doc-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.doc-checklist-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.625rem 0.75rem;
+  background: var(--bg);
+}
+
+.doc-checklist-item.doc-checklist-present {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.doc-checklist-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.doc-checklist-status {
+  font-size: 0.875rem;
+  font-weight: 700;
+  width: 1.25rem;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.doc-checklist-present .doc-checklist-status {
+  color: #16a34a;
+}
+
+.doc-checklist-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.doc-checklist-files {
+  margin-top: 0.375rem;
+  padding-left: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.doc-checklist-file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+}
+
+.doc-checklist-file a {
+  color: var(--primary);
+  word-break: break-all;
+  flex: 1;
+  min-width: 0;
+}
+
+.doc-checklist-form,
+.doc-upload-form {
+  margin-top: 0.375rem;
+  padding-left: 1.75rem;
+}
+
+.input-file-sm {
+  font-size: 0.8125rem;
+}
+.input-file-sm::file-selector-button {
+  height: 1.75rem;
+  padding: 0 0.5rem;
+  font-size: 0.75rem;
+}
+

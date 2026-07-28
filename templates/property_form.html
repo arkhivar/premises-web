@@ -8,136 +8,250 @@
   </div>
 </div>
 
-<div class="card form-card">
-  <form method="post" enctype="multipart/form-data" class="form">
-    <label class="field">
-      <span>Название</span>
-      <input type="text" name="name" value="{{ property.name if property else '' }}" placeholder="Офис на Ленина, 15" required class="input">
-    </label>
+<div class="split-layout">
+  <div class="split-main">
+    <div class="card form-card">
+      <form method="post" enctype="multipart/form-data" class="form" id="propertyForm">
+        <div class="form-row" style="align-items: center;">
+          <label class="field" style="margin-bottom: 0;">
+            <span>Тип</span>
+            <select name="type" class="input" id="propertyType">
+              {% for val, label in type_labels.items() %}
+                <option value="{{ val }}" {% if property and property.type == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <button type="button"
+                  id="ai-fill-btn"
+                  class="btn btn-ghost"
+                  style="height: 2.25rem; margin-top: 1.5rem;"
+                  {% if not property %}disabled title="Сохраните карточку, чтобы использовать AI-заполнение"{% endif %}>
+            ✨ Заполнить из документов
+          </button>
+        </div>
 
-    <label class="field">
-      <span>Тип</span>
-      <select name="type" class="input">
-        {% for val, label in type_labels.items() %}
-          <option value="{{ val }}" {% if property and property.type == val %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
-    </label>
+        <div class="ocr-status" id="ocr-status" style="margin-top: -0.5rem;"></div>
 
-    <label class="field">
-      <span>Адрес</span>
-      <input type="text" name="address" value="{{ property.address if property else '' }}" placeholder="г. Москва, ул. Ленина, д. 15" required class="input">
-    </label>
+        <label class="field">
+          <span>Название</span>
+          <input type="text" name="name" value="{{ property.name if property else '' }}" placeholder="Офис на Ленина, 15" required class="input">
+        </label>
 
-    <div class="form-row">
-      <label class="field">
-        <span>Площадь (м²)</span>
-        <input type="number" step="0.1" name="area" value="{{ property.area if property else '' }}" placeholder="45.5" class="input">
-      </label>
-      <label class="field">
-        <span>Этаж</span>
-        <input type="number" name="floor" value="{{ property.floor if property and property.floor else '' }}" placeholder="3" class="input">
-      </label>
+        <label class="field">
+          <span>Адрес</span>
+          <input type="text" name="address" value="{{ property.address if property else '' }}" placeholder="г. Москва, ул. Ленина, д. 15" required class="input">
+        </label>
+
+        <div class="form-row">
+          <label class="field">
+            <span>Площадь (м²)</span>
+            <input type="number" step="0.1" name="area" value="{{ property.area if property else '' }}" placeholder="45.5" class="input">
+          </label>
+          <label class="field">
+            <span>Этаж</span>
+            <input type="number" name="floor" value="{{ property.floor if property and property.floor else '' }}" placeholder="3" class="input">
+          </label>
+        </div>
+
+        <label class="field">
+          <span>Кадастровый номер</span>
+          <input type="text" name="cadastralNumber" value="{{ property.cadastralNumber if property and property.cadastralNumber else '' }}" placeholder="77:01:0001075:1234" class="input">
+        </label>
+
+        <label class="field-check">
+          <input type="checkbox" name="isPersonal" {% if property and property.isPersonal %}checked{% endif %}>
+          <span>Личная недвижимость (не видна бухгалтеру)</span>
+        </label>
+
+        <label class="field">
+          <span>Собственник</span>
+          <select name="ownerId" class="input">
+            {% for u in owners %}
+              <option value="{{ u.id }}" {% if property and property.ownerId == u.id %}selected{% endif %}{% if not property and current_user.id == u.id %}selected{% endif %}>{{ u.name }} ({{ u.email }})</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <hr class="form-divider">
+
+        <div class="form-section">
+          <label class="field">
+            <span>Фотографии помещения</span>
+            <input type="file" id="photos-input" name="photos" accept="image/*" multiple class="input-file">
+          </label>
+          <div class="paste-zone" id="photo-paste-zone" tabindex="0">
+            <span class="paste-hint">или вставьте изображение из буфера <kbd>Ctrl+V</kbd></span>
+          </div>
+          <div class="upload-gallery" id="photo-preview">
+            {% if property and property.photoUrls %}
+              {% set photos = property.photoUrls|from_json %}
+              {% for url in photos %}
+                <div class="upload-thumb" data-existing>
+                  <img src="{{ url|thumb_url }}" alt="Фото" onerror="this.onerror=null; this.src='{{ url }}'">
+                  <div class="thumb-delete-form">
+                    <button type="button" class="thumb-delete-btn" title="Удалить" data-delete-url="/properties/{{ property.id }}/delete-photo" data-delete-field="url" data-delete-value="{{ url }}">✕</button>
+                  </div>
+                </div>
+              {% endfor %}
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <a href="/properties" class="btn btn-outline">Отмена</a>
+          <button type="submit" class="btn btn-primary">{% if property %}Сохранить{% else %}Добавить{% endif %}</button>
+        </div>
+      </form>
     </div>
+  </div>
 
-    <label class="field">
-      <span>Кадастровый номер</span>
-      <input type="text" name="cadastralNumber" value="{{ property.cadastralNumber if property and property.cadastralNumber else '' }}" placeholder="77:01:0001075:1234" class="input">
-    </label>
-
-    <label class="field-check">
-      <input type="checkbox" name="isPersonal" {% if property and property.isPersonal %}checked{% endif %}>
-      <span>Личная недвижимость (не видна бухгалтеру)</span>
-    </label>
-
-    <label class="field">
-      <span>Собственник</span>
-      <select name="ownerId" class="input">
-        {% for u in owners %}
-          <option value="{{ u.id }}" {% if property and property.ownerId == u.id %}selected{% endif %}{% if not property and current_user.id == u.id %}selected{% endif %}>{{ u.name }} ({{ u.email }})</option>
-        {% endfor %}
-      </select>
-    </label>
-
-    <hr class="form-divider">
-
-    <div class="ocr-section">
-      <div class="ocr-header">
-        <span class="ocr-title">Заполнить из документа</span>
-        <span class="ocr-sub">Загрузите PDF, DOCX или фото документа — поля заполнятся автоматически</span>
+  <div class="split-side">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-header-row">
+          <span class="card-title">Документы</span>
+        </div>
       </div>
-      <div class="ocr-controls">
-        <input type="file" id="ocr-input" accept=".pdf,.docx,.jpg,.jpeg,.png,.gif,.webp,.bmp,.tiff,.tif" class="input-file">
-        <button type="button" id="ocr-btn" class="btn btn-outline" disabled>Распознать</button>
-        <span class="ocr-status" id="ocr-status"></span>
+      <div class="card-body">
+        {% if property %}
+          {% set doc_meta = (property.documentMeta|from_json) if property and property.documentMeta else [] %}
+          {% set docs_by_type = {} %}
+          {% for m in doc_meta %}
+            {% set t = m.type %}
+            {% if t not in docs_by_type %}{% set _ = docs_by_type.update({t: []}) %}{% endif %}
+            {% set _ = docs_by_type[t].append(m) %}
+          {% endfor %}
+
+          <div class="doc-checklist">
+            {# Тех. паспорт #}
+            <div class="doc-checklist-item {% if 'tech_passport' in docs_by_type %}doc-checklist-present{% endif %}">
+              <div class="doc-checklist-info">
+                <span class="doc-checklist-status">{% if 'tech_passport' in docs_by_type %}✓{% else %}—{% endif %}</span>
+                <span class="doc-checklist-name">Технический паспорт</span>
+              </div>
+              {% if 'tech_passport' in docs_by_type %}
+                <div class="doc-checklist-files">
+                  {% for m in docs_by_type['tech_passport'] %}
+                    <div class="doc-checklist-file">
+                      <a href="{{ m.url }}" target="_blank">{{ m.url.split('/')[-1] }}</a>
+                      <button type="button" class="btn btn-ghost btn-sm btn-danger" data-delete-url="/properties/{{ property.id }}/delete-document" data-delete-field="url" data-delete-value="{{ m.url }}">✕</button>
+                    </div>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <form class="doc-upload-form" data-category="tech_passport" data-pid="{{ property.id }}">
+                  <input type="file" name="documents" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.docx,.doc" class="input-file input-file-sm doc-upload-input">
+                </form>
+              {% endif %}
+            </div>
+
+            {# Кадастровый паспорт #}
+            <div class="doc-checklist-item {% if 'cadastral_passport' in docs_by_type %}doc-checklist-present{% endif %}">
+              <div class="doc-checklist-info">
+                <span class="doc-checklist-status">{% if 'cadastral_passport' in docs_by_type %}✓{% else %}—{% endif %}</span>
+                <span class="doc-checklist-name">Кадастровый паспорт</span>
+              </div>
+              {% if 'cadastral_passport' in docs_by_type %}
+                <div class="doc-checklist-files">
+                  {% for m in docs_by_type['cadastral_passport'] %}
+                    <div class="doc-checklist-file">
+                      <a href="{{ m.url }}" target="_blank">{{ m.url.split('/')[-1] }}</a>
+                      <button type="button" class="btn btn-ghost btn-sm btn-danger" data-delete-url="/properties/{{ property.id }}/delete-document" data-delete-field="url" data-delete-value="{{ m.url }}">✕</button>
+                    </div>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <form class="doc-upload-form" data-category="cadastral_passport" data-pid="{{ property.id }}">
+                  <input type="file" name="documents" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.docx,.doc" class="input-file input-file-sm doc-upload-input">
+                </form>
+              {% endif %}
+            </div>
+
+            {# Выписка ЕГРН #}
+            <div class="doc-checklist-item {% if 'egrn_extract' in docs_by_type %}doc-checklist-present{% endif %}">
+              <div class="doc-checklist-info">
+                <span class="doc-checklist-status">{% if 'egrn_extract' in docs_by_type %}✓{% else %}—{% endif %}</span>
+                <span class="doc-checklist-name">Выписка ЕГРН</span>
+              </div>
+              {% if 'egrn_extract' in docs_by_type %}
+                <div class="doc-checklist-files">
+                  {% for m in docs_by_type['egrn_extract'] %}
+                    <div class="doc-checklist-file">
+                      <a href="{{ m.url }}" target="_blank">{{ m.url.split('/')[-1] }}</a>
+                      <button type="button" class="btn btn-ghost btn-sm btn-danger" data-delete-url="/properties/{{ property.id }}/delete-document" data-delete-field="url" data-delete-value="{{ m.url }}">✕</button>
+                    </div>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <form class="doc-upload-form" data-category="egrn_extract" data-pid="{{ property.id }}">
+                  <input type="file" name="documents" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.docx,.doc" class="input-file input-file-sm doc-upload-input">
+                </form>
+              {% endif %}
+            </div>
+
+            {# Другой документ #}
+            <div class="doc-checklist-item doc-checklist-other">
+              <div class="doc-checklist-info">
+                <span class="doc-checklist-status">{% if 'other' in docs_by_type %}✓{% else %}—{% endif %}</span>
+                <span class="doc-checklist-name">Другой документ</span>
+              </div>
+              {% if 'other' in docs_by_type %}
+                <div class="doc-checklist-files">
+                  {% for m in docs_by_type['other'] %}
+                    <div class="doc-checklist-file">
+                      <a href="{{ m.url }}" target="_blank">{{ m.name }} — {{ m.url.split('/')[-1] }}</a>
+                      <button type="button" class="btn btn-ghost btn-sm btn-danger" data-delete-url="/properties/{{ property.id }}/delete-document" data-delete-field="url" data-delete-value="{{ m.url }}">✕</button>
+                    </div>
+                  {% endfor %}
+                </div>
+              {% endif %}
+              <form class="doc-upload-form" data-category="other" data-pid="{{ property.id }}">
+                <input type="text" name="docCustomName" placeholder="Название документа" class="input input-sm doc-custom-name" style="margin-bottom: 0.375rem;">
+                <input type="file" name="documents" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.docx,.doc,.xlsx,.xls" class="input-file input-file-sm doc-upload-input">
+              </form>
+            </div>
+          </div>
+        {% else %}
+          <p class="text-muted text-sm">Документы можно загрузить после создания помещения. Сначала сохраните карточку, затем добавьте файлы.</p>
+        {% endif %}
       </div>
-      <div class="ocr-raw" id="ocr-raw" style="display:none">
+    </div>
+  </div>
+</div>
+
+<!-- AI Fill Modal -->
+<div class="modal-overlay" id="ai-modal" style="display:none">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <span class="modal-title">✨ Заполнить из документа</span>
+      <button type="button" class="modal-close" id="ai-modal-close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p class="text-sm text-muted" style="margin-bottom: 0.75rem;">
+        Выберите документ из правой панели. AI проанализирует его и заполнит поля автоматически.
+      </p>
+      <div id="ai-modal-docs">
+        <!-- Populated by JS -->
+      </div>
+      <div class="ocr-raw" id="ai-modal-raw" style="display:none; margin-top: 1rem;">
         <div class="ocr-raw-header">
           <span class="ocr-raw-title">Распознанный текст:</span>
-          <button type="button" class="ocr-raw-toggle" id="ocr-raw-toggle">Показать</button>
+          <button type="button" class="ocr-raw-toggle" id="ai-modal-raw-toggle">Показать</button>
         </div>
-        <pre class="ocr-raw-text" id="ocr-raw-text" style="display:none"></pre>
+        <pre class="ocr-raw-text" id="ai-modal-raw-text" style="display:none"></pre>
       </div>
-      <div class="ocr-fields" id="ocr-fields" style="display:none">
+      <div class="ocr-fields" id="ai-modal-fields" style="display:none; margin-top: 0.75rem;">
         <span class="ocr-fields-title">Найдены поля:</span>
-        <div id="ocr-fields-list"></div>
+        <div id="ai-modal-fields-list"></div>
       </div>
+      <div id="ai-modal-status" class="ocr-status" style="margin-top: 0.75rem;"></div>
     </div>
-
-    <hr class="form-divider">
-
-    <div class="form-section">
-      <label class="field">
-        <span>Фотографии помещения</span>
-        <input type="file" id="photos-input" name="photos" accept="image/*" multiple class="input-file">
-      </label>
-      <div class="paste-zone" id="photo-paste-zone" tabindex="0">
-        <span class="paste-hint">или вставьте изображение из буфера <kbd>Ctrl+V</kbd></span>
-      </div>
-      <div class="upload-gallery" id="photo-preview">
-        {% if property and property.photoUrls %}
-          {% set photos = property.photoUrls|from_json %}
-          {% for url in photos %}
-            <div class="upload-thumb" data-existing>
-              <img src="{{ url|thumb_url }}" alt="Фото">
-              <div class="thumb-delete-form">
-                <button type="button" class="thumb-delete-btn" title="Удалить" data-delete-url="/properties/{{ property.id }}/delete-photo" data-delete-field="url" data-delete-value="{{ url }}">✕</button>
-              </div>
-            </div>
-          {% endfor %}
-        {% endif %}
-      </div>
-    </div>
-
-    <div class="form-section">
-      <label class="field">
-        <span>Сканы документов</span>
-        <input type="file" name="documents" accept=".pdf,.jpg,.jpeg,.png" multiple class="input-file">
-      </label>
-      {% if property and property.documentUrls %}
-        {% set docs = property.documentUrls|from_json %}
-        {% if docs %}
-          <div class="upload-docs">
-            {% for url in docs %}
-              <div class="doc-row">
-                <a href="{{ url }}" target="_blank" class="doc-link">📄 {{ url.split('/')[-1] }}</a>
-                <button type="button" class="btn btn-ghost btn-sm btn-danger" title="Удалить" data-delete-url="/properties/{{ property.id }}/delete-document" data-delete-field="url" data-delete-value="{{ url }}">✕</button>
-              </div>
-            {% endfor %}
-          </div>
-        {% endif %}
-      {% endif %}
-    </div>
-
-    <div class="form-actions">
-      <a href="/properties" class="btn btn-outline">Отмена</a>
-      <button type="submit" class="btn btn-primary">{% if property %}Сохранить{% else %}Добавить{% endif %}</button>
-    </div>
-  </form>
+  </div>
 </div>
 
 <script>
 (function() {
+  // ── Photos ──
   var input = document.getElementById('photos-input');
   var preview = document.getElementById('photo-preview');
   var zone = document.getElementById('photo-paste-zone');
@@ -202,15 +316,19 @@
     input.click();
   });
 
-  // ── OCR ──
-  var ocrInput = document.getElementById('ocr-input');
-  var ocrBtn = document.getElementById('ocr-btn');
-  var ocrStatus = document.getElementById('ocr-status');
-  var ocrRaw = document.getElementById('ocr-raw');
-  var ocrRawText = document.getElementById('ocr-raw-text');
-  var ocrRawToggle = document.getElementById('ocr-raw-toggle');
-  var ocrFields = document.getElementById('ocr-fields');
-  var ocrFieldsList = document.getElementById('ocr-fields-list');
+  // ── AI Fill Modal ──
+  var aiBtn = document.getElementById('ai-fill-btn');
+  var aiModal = document.getElementById('ai-modal');
+  var aiModalClose = document.getElementById('ai-modal-close');
+  var aiModalDocs = document.getElementById('ai-modal-docs');
+  var aiModalStatus = document.getElementById('ai-modal-status');
+  var aiModalRaw = document.getElementById('ai-modal-raw');
+  var aiModalRawText = document.getElementById('ai-modal-raw-text');
+  var aiModalRawToggle = document.getElementById('ai-modal-raw-toggle');
+  var aiModalFields = document.getElementById('ai-modal-fields');
+  var aiModalFieldsList = document.getElementById('ai-modal-fields-list');
+
+  var propertyId = '{{ property.id if property else "" }}';
 
   var fieldLabels = {
     name: 'Название',
@@ -223,42 +341,80 @@
 
   var typeValues = {'OFFICE': 'Офис', 'APARTMENT': 'Квартира', 'COMMERCIAL': 'Коммерческое', 'WAREHOUSE': 'Склад', 'OTHER': 'Прочее'};
 
-  ocrInput.addEventListener('change', function() {
-    ocrBtn.disabled = !ocrInput.files.length;
-    ocrStatus.textContent = '';
-    ocrRaw.style.display = 'none';
-    ocrFields.style.display = 'none';
+  function openModal() {
+    aiModalStatus.textContent = '';
+    aiModalRaw.style.display = 'none';
+    aiModalFields.style.display = 'none';
+
+    var docRows = document.querySelectorAll('.doc-checklist-files .doc-checklist-file a[href]');
+    if (docRows.length === 0) {
+      aiModalDocs.innerHTML = '<p class="text-muted text-sm">Нет загруженных документов. Загрузите файлы в правую панель.</p>';
+    } else {
+      var html = '<div class="ai-doc-list">';
+      docRows.forEach(function(row) {
+        var url = row.getAttribute('href');
+        var name = url.split('/').pop();
+        html += '<div class="ai-doc-item">' +
+          '<span class="ai-doc-name">' + name + '</span>' +
+          '<button type="button" class="btn btn-sm btn-outline ai-doc-btn" data-url="' + url + '">Распознать</button>' +
+          '</div>';
+      });
+      html += '</div>';
+      aiModalDocs.innerHTML = html;
+
+      aiModalDocs.querySelectorAll('.ai-doc-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          runOcr(btn.getAttribute('data-url'));
+        });
+      });
+    }
+
+    aiModal.style.display = 'flex';
+  }
+
+  function closeModal() {
+    aiModal.style.display = 'none';
+  }
+
+  if (aiBtn) {
+    aiBtn.addEventListener('click', openModal);
+  }
+  if (aiModalClose) {
+    aiModalClose.addEventListener('click', closeModal);
+  }
+  aiModal.addEventListener('click', function(e) {
+    if (e.target === aiModal) closeModal();
   });
 
-  ocrBtn.addEventListener('click', function() {
-    if (!ocrInput.files.length) return;
-    var file = ocrInput.files[0];
-    ocrBtn.disabled = true;
-    ocrStatus.textContent = 'Распознаю...';
-    ocrStatus.className = 'ocr-status ocr-status-loading';
+  function runOcr(url) {
+    aiModalStatus.textContent = 'Распознаю...';
+    aiModalStatus.className = 'ocr-status ocr-status-loading';
+    aiModalRaw.style.display = 'none';
+    aiModalFields.style.display = 'none';
 
-    var formData = new FormData();
-    formData.append('file', file);
+    aiModalDocs.querySelectorAll('.ai-doc-btn').forEach(function(b) { b.disabled = true; });
 
-    fetch('/properties/ocr', { method: 'POST', body: formData })
+    var fd = new FormData();
+    fd.append('url', url);
+
+    fetch('/properties/' + propertyId + '/ocr-from-url', { method: 'POST', body: fd })
       .then(function(r) { return r.json(); })
       .then(function(data) {
+        aiModalDocs.querySelectorAll('.ai-doc-btn').forEach(function(b) { b.disabled = false; });
+
         if (data.error) {
-          ocrStatus.textContent = 'Ошибка: ' + data.error;
-          ocrStatus.className = 'ocr-status ocr-status-error';
-          ocrBtn.disabled = false;
+          aiModalStatus.textContent = 'Ошибка: ' + data.error;
+          aiModalStatus.className = 'ocr-status ocr-status-error';
           return;
         }
-        ocrStatus.textContent = 'Готово! Проверьте поля.';
-        ocrStatus.className = 'ocr-status ocr-status-ok';
+        aiModalStatus.textContent = 'Готово! Поля заполнены.';
+        aiModalStatus.className = 'ocr-status ocr-status-ok';
 
-        // Show raw text
         if (data.raw_text) {
-          ocrRawText.textContent = data.raw_text;
-          ocrRaw.style.display = 'block';
+          aiModalRawText.textContent = data.raw_text;
+          aiModalRaw.style.display = 'block';
         }
 
-        // Show found fields
         var fields = data.fields || {};
         var hasFields = false;
         var listHtml = '';
@@ -270,34 +426,72 @@
           }
         }
         if (hasFields) {
-          ocrFieldsList.innerHTML = listHtml;
-          ocrFields.style.display = 'block';
+          aiModalFieldsList.innerHTML = listHtml;
+          aiModalFields.style.display = 'block';
         }
 
-        // Auto-fill form
-        if (fields.name) { var el = document.querySelector('[name="name"]'); if (el) el.value = fields.name; }
-        if (fields.type) { var el = document.querySelector('[name="type"]'); if (el) el.value = fields.type; }
-        if (fields.address) { var el = document.querySelector('[name="address"]'); if (el) el.value = fields.address; }
-        if (fields.area) { var el = document.querySelector('[name="area"]'); if (el) el.value = fields.area; }
-        if (fields.floor) { var el = document.querySelector('[name="floor"]'); if (el) el.value = fields.floor; }
-        if (fields.cadastralNumber) { var el = document.querySelector('[name="cadastralNumber"]'); if (el) el.value = fields.cadastralNumber; }
-
-        ocrBtn.disabled = false;
+        if (fields.name) { var el = document.querySelector('#propertyForm [name="name"]'); if (el) el.value = fields.name; }
+        if (fields.type) { var el = document.querySelector('#propertyForm [name="type"]'); if (el) el.value = fields.type; }
+        if (fields.address) { var el = document.querySelector('#propertyForm [name="address"]'); if (el) el.value = fields.address; }
+        if (fields.area) { var el = document.querySelector('#propertyForm [name="area"]'); if (el) el.value = fields.area; }
+        if (fields.floor) { var el = document.querySelector('#propertyForm [name="floor"]'); if (el) el.value = fields.floor; }
+        if (fields.cadastralNumber) { var el = document.querySelector('#propertyForm [name="cadastralNumber"]'); if (el) el.value = fields.cadastralNumber; }
       })
       .catch(function(err) {
-        ocrStatus.textContent = 'Ошибка сети: ' + err.message;
-        ocrStatus.className = 'ocr-status ocr-status-error';
-        ocrBtn.disabled = false;
+        aiModalDocs.querySelectorAll('.ai-doc-btn').forEach(function(b) { b.disabled = false; });
+        aiModalStatus.textContent = 'Ошибка сети: ' + err.message;
+        aiModalStatus.className = 'ocr-status ocr-status-error';
       });
+  }
+
+  aiModalRawToggle.addEventListener('click', function() {
+    var hidden = aiModalRawText.style.display === 'none';
+    aiModalRawText.style.display = hidden ? 'block' : 'none';
+    aiModalRawToggle.textContent = hidden ? 'Скрыть' : 'Показать';
   });
 
-  ocrRawToggle.addEventListener('click', function() {
-    var hidden = ocrRawText.style.display === 'none';
-    ocrRawText.style.display = hidden ? 'block' : 'none';
-    ocrRawToggle.textContent = hidden ? 'Скрыть' : 'Показать';
+  // ── Category document upload (AJAX) ──
+  document.querySelectorAll('.doc-upload-input').forEach(function(input) {
+    input.addEventListener('change', function() {
+      var form = input.closest('.doc-upload-form');
+      var pid = form.getAttribute('data-pid');
+      var category = form.getAttribute('data-category');
+      if (!input.files.length) return;
+
+      var customName = '';
+      if (category === 'other') {
+        var nameInput = form.querySelector('.doc-custom-name');
+        customName = nameInput ? nameInput.value.trim() : '';
+        if (!customName) {
+          alert('Укажите название документа');
+          input.value = '';
+          return;
+        }
+      }
+
+      var fd = new FormData();
+      fd.append('documents', input.files[0]);
+      fd.append('docCategory', category);
+      if (customName) fd.append('docCustomName', customName);
+
+      fetch('/properties/' + pid + '/upload-doc', { method: 'POST', body: fd })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.ok) {
+            window.location.reload();
+          } else {
+            alert('Ошибка: ' + (data.error || 'неизвестная ошибка'));
+            input.value = '';
+          }
+        })
+        .catch(function(err) {
+          alert('Ошибка сети: ' + err.message);
+          input.value = '';
+        });
+    });
   });
 
-  // ── Delete buttons (photo / document) via fetch ──
+  // ── Delete buttons ──
   document.querySelectorAll('[data-delete-url]').forEach(function(btn) {
     btn.addEventListener('click', function() {
       var url = btn.getAttribute('data-delete-url');
